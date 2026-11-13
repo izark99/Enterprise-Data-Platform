@@ -8,7 +8,7 @@ paths:
 
 # UI
 
-- Design source: `docs/redesign/04-ui-ux-system.md` (Design System v3). Legacy screens (`src/components/`, the v2 `@theme` block in `src/index.css`, class-string exports of `components/ui.tsx`) show behaviour and texts only; new code never copies their styling or structure.
+- Design source: `docs/redesign/04-ui-ux-system.md` (Design System v3). Default Vietnamese texts come from `docs/archive/locales-vi/` (`docs/redesign/06-plan.md` §2 question 8).
 - Visual values exist only in `src/ui/tokens/*.css`. Feature code uses semantic utilities (`text-fg-muted`, `gap-group`, `h-ctl`) and `ui` components. No hex, no arbitrary value, no Tailwind default palette, no `className` passed to `ui` components.
 - A screen picks one page template (04 §7.1). It never writes its own `<main>`, page frame, `<table>`, form field, dialog, toast, popover, file input, or SVG icon. Missing pattern → add it to `src/ui/` and to 04 first.
 - Density comes from `data-density` on the layout container. Components never take a `dense` flag.

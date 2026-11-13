@@ -1,9 +1,9 @@
 # 03 — Domain and Data Model
 
-> This document records the model **as implemented in the legacy baseline** (source:
-> `supabase/migrations/*.sql`, `packages/flow-schema/src/*.ts`, `apps/web/src/engine/`), so the
-> rewrite has one reference. Behaviour must not change; whether the database is reused as is:
-> `06-plan.md` §2 question 3.
+> This document is the **specification of the model**. It was recorded from the previous
+> implementation (`supabase/migrations/*.sql`, `packages/flow-schema/src/*.ts`, `apps/web/src/engine/`
+> at commit `6fd5868`). The rewrite builds the schema again from it, in a new Supabase project
+> (ADR-012). Behaviour must not change.
 > Node-level behaviour (each node's config and semantics, the 41 formula functions, validation
 > messages) stays in the frozen reference `docs/archive/spec.md` §8–§14, §24, §27, §34.
 
@@ -294,16 +294,12 @@ audit server-side. If decision 2A is ever reversed, this section must be redesig
 
 ## 8. Migration strategy
 
-The target design needs **no table, column or policy change**. Three database operations are
-pending (ADR-010), all read-only or metadata-only and reversible:
+The schema is created from scratch in a new Supabase project (ADR-012). The first migrations
+implement §2–§7 of this document and are applied with the tool that records migration history, so
+the history is correct from the first file. No row of the previous project is carried over unless
+the owner asks (`06-plan.md` §2 question 7).
 
-| Step | Action | Reversible by | Data loss risk |
-|------|--------|---------------|----------------|
-| M-1 | Run `db-tests.yml` (all files are `begin … rollback`) and `backup.yml` on the real DB | n/a (read-only / self-rolling-back) | none |
-| M-2 | Record the 6 existing migration files in the migration-history table so tooling can detect drift | Removing the 6 rows | none (history table only) |
-| M-3 | Compare `database.types.ts` with types generated from the real DB; fix the TS file only | git revert | none |
-
-Rules for any future migration (procedure in the `db-migration` skill):
+Rules for every migration (procedure in the `db-migration` skill):
 
 1. New file `supabase/migrations/<UTC timestamp>_<name>.sql`; never edit an applied file.
 2. Additive first (new nullable column / new table), backfill, then switch code, then constrain. Removal is a separate later migration after one release.
@@ -331,7 +327,7 @@ the Personal Data Protection Law in force from 2026 — verify the current text)
 
 | ID | Type | Statement |
 |----|------|-----------|
-| D-03-1 | DECISION | The target design needs no schema change; behaviour reference stays in `docs/archive/spec.md`. |
+| D-03-1 | DECISION | The new schema reproduces this model in a new Supabase project (ADR-012); behaviour reference stays in `docs/archive/spec.md`. |
 | D-03-2 | DECISION | Version lifecycle SQL stays duplicated for flows and reference tables (ADR-007). |
-| A-03-1 | ASSUMPTION | The migration-history table on this project has the standard shape (`version`, `name`, `statements`); it is inspected before anything is written. |
+| A-03-1 | ASSUMPTION | This document is complete enough to rebuild the schema; a gap found while writing the migrations is settled with the owner (`06-plan.md` Q-06-2). |
 | Q-03-1 | OPEN QUESTION | Who calls `purge_run_logs()` and how long `audit_logs` are kept (C-5) is not decided. Default until decided: nothing is purged automatically. |

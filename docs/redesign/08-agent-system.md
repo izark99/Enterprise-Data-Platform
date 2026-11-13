@@ -24,7 +24,7 @@ Must never be broken → a hook. Derivable from the code → nowhere.
 ## 2. Session protocol
 
 1. `git fetch origin main`; `CLAUDE.md` loads by itself; read the Progress Log.
-2. Take the first task that is `todo` with all dependencies `done` (skill `execute-task`). One task per session. No `todo` task → report the open owner decisions of `06-plan.md` §2; do not invent work.
+2. Take the first task that is `todo` with all dependencies `done` (skill `execute-task`). One task per session. No `todo` task → at a phase boundary write the next phase's tasks (skill `clarify`); otherwise report the open owner decisions of `06-plan.md` §2. Do not invent work.
 3. A request that is not a task in the plan goes through the skill `clarify` first.
 4. Finish = verification commands pass, Progress Log updated, commit pushed. Report in Vietnamese: done, evidence (command + result), not done, open questions.
 
@@ -46,7 +46,7 @@ The main session re-checks any important claim in a subagent report before passi
 | Guard | Blocks | Tested 2026-11-13 (stdin `{"tool_input":{"file_path":"…"}}`) |
 |-------|--------|----------------------------------------------------------------|
 | `deny` in `settings.json` | Reading `.env`, `.env.local`, `apps/web/.env.local`, `**/.env.*.local` | Not exercised (needs a live permission prompt) |
-| `protect-files.sh` (PreToolUse `Edit\|Write`) | `vendor/**`, `docs/archive/**`, env files except `*.env.example`, released migrations (file exists on `origin/main`, or its version ≤ `20261109150000`, the last one applied to the real DB) | Exit 2 for `vendor/README.md`, `docs/archive/spec.md`, `apps/web/.env.local`, `.env`, the first and last of the 6 migration files; exit 0 for `apps/web/.env.example`, a new migration `20261201000000_new.sql`, `apps/web/src/app/App.tsx`, `docs/redesign/06-plan.md` |
+| `protect-files.sh` (PreToolUse `Edit\|Write`) | `vendor/**`, `docs/archive/**` except its index `README.md`, env files except `*.env.example`, released migrations (file exists on `origin/main`) | Exit 2 for `vendor/README.md`, `docs/archive/spec.md`, `apps/web/.env.local`, `.env`, and (in a scratch repository) a migration file present on `origin/main`; exit 0 for `docs/archive/README.md`, `apps/web/.env.example`, a new migration file, `apps/web/src/app/App.tsx`, `docs/redesign/06-plan.md` |
 | `verifier-test-only.sh` (frontmatter of `verifier.md`) | Any verifier write outside `e2e/`, `fixtures/`, `supabase/tests/`, `__tests__/`, `*.test.ts(x)`, `*.spec.ts` | Exit 2 for `apps/web/src/app/App.tsx`; exit 0 for one path of each allowed kind |
 | `format.sh` (PostToolUse `Edit\|Write`) | Nothing; runs Prettier on the edited file | Exit 0; a badly formatted `.js` file was reformatted |
 

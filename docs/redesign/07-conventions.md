@@ -1,7 +1,6 @@
 # 07 — Conventions
 
-> Applies to all new code. The legacy baseline differs in places: it is a behaviour reference, not
-> a model. `src/` means `apps/web/src/`.
+> Applies to all code in this repository. `src/` means `apps/web/src/`.
 
 ## 1. Naming
 
@@ -56,7 +55,7 @@
 ## 5. API conventions (`src/api/`)
 
 ```ts
-// shape of every module (the shape of the legacy AdminApi / RefTablesApi, one class per resource)
+// shape of every module (one class per resource)
 export class GroupsApi {
   constructor(private readonly sb: GroupsClient) {}        // GroupsClient = Pick<Supabase, 'from'>: fakeable in tests
   async list(): Promise<Group[]> { … }

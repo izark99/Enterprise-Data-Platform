@@ -10,7 +10,7 @@ pack.
 
 Before coding
 1. Read `CLAUDE.md`, the task, and only the sections the task or the context pack names.
-2. Read the code you will change. Code imported from the previous repository is the legacy baseline: use it to learn behaviour and texts, not structure.
+2. Read the code you will change. The documents are the specification; there is no older code in the tree to copy from.
 3. If the task is unclear, contradicts `docs/MEMORY.md` or `docs/redesign/`, or needs a design decision: stop and return the questions (2–3 options each, one recommended). Do not guess.
 
 Rules that always apply

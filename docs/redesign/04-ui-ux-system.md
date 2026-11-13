@@ -3,9 +3,9 @@
 > Owner decision 5C (2026-11-13): redesign the UI as **one shared system** so later development
 > reuses it, does not drift, and is not re-coded.
 > DS v3 replaces the v2 tokens (`apps/web/src/index.css`) and the folder `src/components/` of the
-> legacy baseline; the rewrite builds every screen on v3 from the start.
+> previous implementation; the rewrite builds every screen on v3 from the start.
 > UI language: Vietnamese (i18n keys). This document is in English; Vietnamese strings shown are
-> existing labels from `src/locales/vi/common.json`.
+> labels of the previous implementation (`docs/archive/locales-vi/common.json`).
 > `src/` means `apps/web/src/`.
 
 ## 1. Principles
@@ -145,7 +145,7 @@ Tone type shared by components: `Tone = 'positive' | 'negative' | 'warning' | 'i
 
 ### 5.3 Typography
 
-Font: **Be Vietnam Pro**, self-hosted, weights **400 and 600 only** (the legacy 500 and 700 files are not carried over).
+Font: **Be Vietnam Pro**, self-hosted, weights **400 and 600 only** (no 500 or 700 files).
 Mono stack for `text-mono`: `ui-monospace, 'Cascadia Mono', Consolas, monospace` (Monaco keeps its own font).
 
 | Utility | Role | Comfortable (size/line) | Compact | Weight | Mobile < 768 (comfortable) |

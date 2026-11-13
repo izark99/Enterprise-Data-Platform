@@ -1,8 +1,0 @@
-packages:
-  - apps/*
-  - packages/*
-  - supabase/functions
-
-# pnpm 10 blocks dependency lifecycle scripts by default; allow only what the toolchain needs.
-onlyBuiltDependencies:
-  - esbuild

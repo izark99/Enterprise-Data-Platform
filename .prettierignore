@@ -1,9 +1,0 @@
-node_modules
-dist
-coverage
-pnpm-lock.yaml
-fixtures
-*.md
-.claude
-test-results
-playwright-report

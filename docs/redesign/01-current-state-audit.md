@@ -2,8 +2,9 @@
 
 > Audited commit: `7103d18` (branch = `origin/main`), 2026-11-13. Read-only.
 > Paths are relative to the repo root; `src/` means `apps/web/src/`.
-> The code audited is the **legacy baseline** imported into this repository (ADR-012). "Design
-> answer" names where the target design resolves a finding; the rewrite must not reproduce it.
+> The code audited is the **previous implementation**, since removed from this tree (ADR-012); its
+> paths are readable with `git show 6fd5868:<path>`. "Design answer" names where the target design
+> resolves a finding; the rewrite must not reproduce it.
 
 ## 1. Verified commands
 
@@ -60,9 +61,9 @@ Severity: **High** = data-safety or recovery risk; **Medium** = slows every futu
 
 | ID | Finding | Evidence | Sev | Design answer |
 |----|---------|----------|-----|--------------|
-| AUD-01 | Migration history table on the real DB is empty: all 6 migrations were applied with ad-hoc SQL. Schema drift cannot be detected by tooling. | Supabase `list_migrations` → `[]`; `docs/archive/HANDOFF.md` §3 | High | ADR-010 (history baseline) |
-| AUD-02 | `supabase/tests/rls.sql` and `versions.sql` have never run on the real DB; no backup has ever run. | `docs/archive/HANDOFF.md` §3; `docs/archive/PLAN.md` §4 M0.1–M0.2 | High | ADR-010 item 1; owner action in `06-plan.md` §3 |
-| AUD-03 | Repo is public and contains operating notes (project ref, first admin username, list of unverified areas). | `docs/archive/PLAN.md` §8.5, `docs/archive/HANDOFF.md` §2 | Medium | Owner action in `06-plan.md` §3 |
+| AUD-01 | Migration history table on the real DB is empty: all 6 migrations were applied with ad-hoc SQL. Schema drift cannot be detected by tooling. | Supabase `list_migrations` → `[]`; `docs/archive/HANDOFF.md` §3 | High | Cannot recur: the new project gets every migration through the tool that records history (ADR-010) |
+| AUD-02 | `supabase/tests/rls.sql` and `versions.sql` have never run on the real DB; no backup has ever run. | `docs/archive/HANDOFF.md` §3; `docs/archive/PLAN.md` §4 M0.1–M0.2 | High | ADR-010; workflows rebuilt in P3 against the new project |
+| AUD-03 | Repo is public and contains operating notes (project ref, first admin username, list of unverified areas). | `docs/archive/PLAN.md` §8.5, `docs/archive/HANDOFF.md` §2 | Medium | Owner action in `06-plan.md` §3 (make the repository private) |
 | AUD-04 | UI imports engine internals, not only the protocol: `engine/design`, `engine/formula/{compile,functions,parser,refs}`, `engine/io/{validation,ref-import}`, `engine/preview`, `engine/worker`; 4 of them are value imports. Engine imports `lib/text-vars`. | 21 import lines under `src/features/**`; `src/engine/core/i18n.ts` line 5 | Medium | ADR-003; 02 §3 |
 | AUD-05 | Module boundaries are convention only; ESLint has no import-zone rule. | `eslint.config.js` | Medium | ADR-003; 02 §3 |
 | AUD-06 | Cross-feature coupling: 23 import edges. `designer → admin` (`admin-api`, `use-admin`, `versions/FlowVersionsPage`), `admin/designer/auth → runner` (`engine-client`, `as-of`, `components/ParamsCard`), `admin → auth` (`auth-context`, `credentials`), `runner → auth` (`idle/activity`). | grep of `from '../<feature>/…'` in `src/features` | Medium | 02 §2, §4 (`shared/`) |
@@ -88,7 +89,7 @@ Severity: **High** = data-safety or recovery risk; **Medium** = slows every futu
 | AUD-26 | Supabase security advisor: "Leaked password protection disabled" (WARN); 2 `SECURITY DEFINER` functions callable by `authenticated` (intended, self-checking). | advisor output 2026-11-13; `20261026080200_rpc.sql` (`my_recent_runs`, `purge_run_logs`) | Low | First: accepted if the plan does not offer it (ADR-010 A-10-2); second accepted |
 | AUD-27 | `e2e/layout-lint.ts` hardcodes `CONTROL_H = 44`, `SMALL_H = 36`. | `e2e/layout-lint.ts` lines 503–504 | Low | 04 §10 (`layout-lint` reads the density tokens) |
 | AUD-28 | `components/KpiCard.tsx` imports `lib/format` (UI kit depends on app utilities). | `src/components/KpiCard.tsx` line 2 | Low | 04 §6.5 (`KpiCard` takes `value: string`) |
-| AUD-29 | `ui_text_overrides` holds 105 rows that now equal the built-in defaults. | DB row count; `docs/archive/PLAN.md` §8.6 | Low | Owner action in `06-plan.md` §3 |
+| AUD-29 | `ui_text_overrides` holds 105 rows that now equal the built-in defaults. | DB row count; `docs/archive/PLAN.md` §8.6 | Low | Void: the new database starts without overrides |
 | AUD-30 | Product is barely used (2 accounts, 3 runs); most past effort went to UI polish. | DB row counts; `docs/archive/HANDOFF.md` §6 | Medium | 00 (S7); backlog |
 | AUD-31 | Known engine MINOR items remain open (timezone ISO cell, Unicode key edge cases, slow DEFLATE edge file, 50-column formula planning). | `docs/archive/HANDOFF.md` §4.2, §4.4, §4.6, §4.7 | Low | Backlog B-07 |
 

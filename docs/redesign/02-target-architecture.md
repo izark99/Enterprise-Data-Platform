@@ -1,6 +1,6 @@
 # 02 — Target Architecture
 
-> The runtime architecture does **not** change (ADR-002). What changes against the legacy baseline is
+> The runtime architecture does **not** change (ADR-002). What changes against the previous implementation is
 > the module structure inside `apps/web/src`, the rules between modules, and how they are enforced.
 > `src/` means `apps/web/src/`.
 
@@ -31,6 +31,27 @@ flowchart LR
 
 Hard boundary (unchanged, non-negotiable): **file content exists only in the worker and in memory.**
 Nothing from a file goes to `api`, logs, storage or the URL.
+
+### 1.1 Technology stack
+
+Fixed. A dependency that is not in this table, or a newer major version, needs the owner's approval.
+
+| Use | Package | Version |
+|-----|---------|---------|
+| Language, build | `typescript` · `vite` · `@vitejs/plugin-react` | ~5.9.3 · ^8.3.5 · ^6.2.1 |
+| UI runtime | `react`, `react-dom` | ^19.2.0 |
+| Styling | `tailwindcss`, `@tailwindcss/vite` · `@fontsource/be-vietnam-pro` (self-hosted font) | ^4.1.16 · ^5.3.0 |
+| Routing, tables | `@tanstack/react-router` · `@tanstack/react-table` · `@tanstack/react-virtual` | ^1.170.46 · ^8.21.3 · ^3.14.26 |
+| i18n | `i18next` · `react-i18next` | ^26.5.11 · ^16.2.0 |
+| Schemas | `zod` | ^4.1.12 |
+| Engine | `@duckdb/duckdb-wasm` · `apache-arrow` · `big.js` · `comlink` · `fflate` | 1.32.0 · 17.0.0 · ^7.0.1 · ^4.4.2 · 0.8.3 |
+| Excel | `xlsx` (SheetJS CE, vendored: `vendor/xlsx-0.20.3.tgz`, checksum in `vendor/README.md`) — read · `exceljs` — write | 0.20.3 · ^4.4.0 |
+| Designer | `@xyflow/react` (React Flow) · `monaco-editor` | 12.12.0 · 0.57.0 |
+| Server client | `@supabase/supabase-js` | 2.118.0 |
+| Tests | `vitest` · `@playwright/test` · `@axe-core/playwright` | ^5.1.0 · 1.64.1 · ^4.14.0 |
+| Lint, format | `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-config-prettier`, `globals` · `prettier` | ^10.14.0 (eslint) · ^3.6.2 |
+| Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
+| Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
 
 ## 2. Layers and modules
 
@@ -105,8 +126,8 @@ repo root/
 │     │     ├─ AdminLayout.tsx  nav.ts
 │     │     ├─ users/                UsersPage.tsx  GroupsPage.tsx  AssignmentsPage.tsx  {CreateUserDialog,EditUserDialog,TempPasswordDialog,GroupDialog}.tsx
 │     │     ├─ flows/                FlowsPage.tsx  ImportFlowDialog.tsx  CreateFlowDialog.tsx  versions/{FlowVersionsPage,DiffView,Timeline}.tsx  versions/version-diff.ts
-│     │     ├─ ref-tables/           (same screens as the legacy baseline)
-│     │     └─ ui-text/              (same screens as the legacy baseline)
+│     │     ├─ ref-tables/           (screens of 04 §4)
+│     │     └─ ui-text/              (screens of 04 §4)
 │     ├─ shared/
 │     │  ├─ auth/                    auth-service.ts  auth-context.tsx  guard.ts  credentials.ts  session-revoke.ts
 │     │  ├─ engine/                  engine-client.ts  activity.ts
@@ -138,8 +159,6 @@ repo root/
 ├─ e2e/                              user/ admin/ designer/ engine/ ui/ support/ __screenshots__/
 ├─ fixtures/  vendor/  scripts/  .github/workflows/
 ```
-
-Legacy folders with no place in the target: `src/components/`, `src/lib/`.
 
 ## 5. Data flow — three most important use cases
 
@@ -242,6 +261,20 @@ Rules: no raw `error.message` from the server is rendered; no thrown string; eve
 | `SUPABASE_DB_URL`, `BACKUP_PASSPHRASE` | GitHub Actions secrets | Used only by `backup.yml`, `db-tests.yml` |
 | Bundle limits | `apps/web/bundle-budget.json` | Start-up JS ≤ 240 KiB gzip; CSS limit see ADR-005 |
 
+Security headers, served for `/*` from `apps/web/public/_headers` (`<ref>` = the Supabase project reference):
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://<ref>.supabase.co wss://<ref>.supabase.co blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Cross-Origin-Opener-Policy: same-origin
+```
+
+Why each exception exists: `'wasm-unsafe-eval'` instantiates DuckDB-WASM (self-hosted binary); `worker-src blob:` and `connect-src blob:` let the engine worker hand the checksum-verified DuckDB `.wasm` to DuckDB as a local object URL; `style-src 'unsafe-inline'` because Monaco and React Flow inject `<style>` at run time (inline scripts stay blocked); `font-src 'self'` because the font is bundled.
+
 ### 6.4 Authentication and authorisation
 
 - Sign-in: username + password (username mapped to a synthetic email), forced change on first sign-in, session in `sessionStorage`, idle sign-out after 8 h.
@@ -281,5 +314,6 @@ No global store library. No data persisted in `localStorage` / IndexedDB except 
 | D-02-3 | DECISION | `api/` is the only Supabase caller; no query library (ADR-004). |
 | D-02-4 | DECISION | `admin` stays one feature module with four sub-folders. |
 | A-02-1 | ASSUMPTION | Rolldown tree-shakes the two engine public modules so the start-up JS does not grow; the bundle check in `pnpm build` proves or disproves it as soon as `formula/public.ts` exists. |
-| A-02-2 | ASSUMPTION | The rewritten engine keeps the legacy module split (`core`, `io`, `duckdb`, `formula`, `nodes`). Not decided by the owner; the rewrite plan may change it. |
+| A-02-2 | ASSUMPTION | The engine uses the module split of the previous implementation (`core`, `io`, `duckdb`, `formula`, `nodes`). Not decided by the owner; the tasks of phase P1 may change it. |
+| A-02-3 | ASSUMPTION | The versions of §1.1 are those the previous implementation ran on (its manifests at commit `6fd5868`); they were not re-checked against today's releases. |
 | Q-02-1 | OPEN QUESTION | None. |

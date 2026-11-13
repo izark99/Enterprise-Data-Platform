@@ -45,7 +45,7 @@ No third role. No self sign-up.
 - Flow and reference-table versioning by effective date; immutable published versions.
 - Admin screens: flows, versions, Designer, reference tables, users / groups / assignments, UI text overrides.
 - One shared design system (DS v3) used by every screen; Vietnamese UI with i18n structure.
-- This redesign: architecture boundaries, data-access layer, DS v3, agent system, ops safety. **No change to engine results** (the rewrite must reproduce them; `06-plan.md` §2 question 2 decides how that is proven).
+- This redesign: architecture boundaries, data-access layer, DS v3, agent system, ops safety. **No change to engine results** (the new engine must reproduce the two fixtures in `fixtures/`).
 
 ## Out of scope
 
@@ -71,6 +71,6 @@ No third role. No self sign-up.
 
 | ID | Type | Statement |
 |----|------|-----------|
-| A-00-1 | ASSUMPTION | "Rewrite first": feature work (reference tables round 2, `output.template`) resumes when the rewrite reaches parity with the legacy baseline. The owner did not pick an order explicitly. |
+| A-00-1 | ASSUMPTION | "Rewrite first": feature work (reference tables round 2, `output.template`) resumes after phase P7 of `06-plan.md`. The owner did not pick an order explicitly. |
 | A-00-2 | ASSUMPTION | S7 targets are unchanged from the archived plan (`docs/archive/PLAN.md` §1). |
 | Q-00-1 | OPEN QUESTION | Which concrete visual traits of the current UI does the owner dislike (answer 3C)? DS v3 changes structure, density and scale; palette hue and typeface are kept as swappable theme values until the owner says otherwise (`04-ui-ux-system.md` §11). |
