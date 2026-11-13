@@ -40,7 +40,7 @@ project*, *Custom subagents*, *Hooks guide*):
 - **State** lives in one place: the Progress Log in `06-refactor-plan.md`. A session starts by reading it and ends by updating it.
 - **Main session** executes S and M tasks itself. **`implementer`** subagent is used only for tasks marked L (context isolation). **`verifier`** subagent runs at the end of every phase and after every task marked "verify", in a fresh context, read-and-test only.
 - One subagent at a time (owner's usage limit; kept from 2026-10-28).
-- **Deterministic guards** (08 §6): edits blocked on released migration files, `vendor/`, `docs/archive/` and env files; the verifier may write only test / fixture / E2E files; Prettier runs after each edit; `.env.local` is unreadable.
+- **Deterministic guards** (08 §4): edits blocked on released migration files, `vendor/`, `docs/archive/` and env files; the verifier may write only test / fixture / E2E files; Prettier runs after each edit; `.env.local` is unreadable.
 - Language: instructions in English; conversation with the owner in Vietnamese, questions as numbered A/B/C options with one recommended.
 
 ## Consequences

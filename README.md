@@ -6,7 +6,7 @@ Webapp nội bộ xử lý dữ liệu Excel **trực tiếp trên trình duyệ
 
 ## Trạng thái
 
-Phase 1 (MVP) đã xong; đang ở Phase 2. Lộ trình, mốc đang mở và việc không làm: [`docs/PLAN.md`](docs/PLAN.md). Trạng thái chi tiết: [`docs/HANDOFF.md`](docs/HANDOFF.md).
+Ngày 2026-11-13 chủ dự án quyết định **viết lại toàn bộ ứng dụng ở repo này**; phạm vi sản phẩm không đổi. Code hiện có là bản gốc mang sang từ repo cũ, dùng làm tham chiếu hành vi (mọi kiểm tra đều đạt). Kế hoạch, các quyết định còn chờ và trạng thái: [`docs/redesign/06-plan.md`](docs/redesign/06-plan.md). Bảng dưới mô tả bản gốc.
 
 | Hạng mục | Trạng thái |
 |----------|-----------|
@@ -14,9 +14,9 @@ Phase 1 (MVP) đã xong; đang ở Phase 2. Lộ trình, mốc đang mở và vi
 | Màn User: danh sách luồng xử lý, chạy (tham số → tải file và kiểm tra → chạy), kết quả | ✅ |
 | Supabase: đăng nhập, đổi mật khẩu lần đầu, RLS, flow/version theo ngày hiệu lực, run log metadata | ✅ |
 | Admin: tài khoản và nhóm, flow, phiên bản và hiệu lực (kèm so sánh), Flow Designer, văn bản giao diện, bảng tham chiếu (quản lý dữ liệu và phiên bản) | ✅ |
-| Dùng bảng tham chiếu trong flow (node `input.refTable`) | ⏳ kế tiếp (PLAN M1) |
+| Dùng bảng tham chiếu trong flow (node `input.refTable`) | ⏳ backlog B-01 |
 | Sao lưu hằng tuần có kiểm tra khôi phục (`.github/workflows/backup.yml`) | ✅ workflow; cần 2 secret (xem "Sao lưu và khôi phục") |
-| Màn Lịch sử hoạt động (Logs), template Excel (`output.template`) | Chưa làm (PLAN M4, M5) |
+| Màn Lịch sử hoạt động (Logs), template Excel (`output.template`) | Chưa làm (backlog B-04, B-06) |
 | Python (Pyodide) | Chỉ làm khi có flow thật cần tới |
 
 Wireframe giao diện bản đầu (chỉ tham khảo bố cục): https://claude.ai/artifact/BUfBGjG3F8XyXmctD86QzW (link riêng tư, cần được chia sẻ mới xem được).
@@ -32,7 +32,7 @@ Cloudflare ── host SPA (Pages, deploy từ main)
 GitHub ───── CI + Actions theo lịch: giữ Supabase không bị pause, sao lưu hằng tuần
 ```
 
-Chi tiết: [`docs/spec.md`](docs/spec.md).
+Chi tiết: [`docs/redesign/02-target-architecture.md`](docs/redesign/02-target-architecture.md).
 
 ## Cấu trúc thư mục
 
@@ -49,12 +49,14 @@ supabase/
 fixtures/              Dữ liệu GIẢ cho kiểm thử (+ script sinh dữ liệu)
 vendor/                Thư viện vendored (SheetJS CE), có checksum
 docs/
-  spec.md              Đặc tả hệ thống
+  redesign/            Tài liệu thiết kế 00–08 + ADR (tiếng Anh); 06-plan.md = kế hoạch và trạng thái
   MEMORY.md            Nhật ký quyết định (YYYY-MM-DD HH:MM - Quyết định)
-.claude/agents/        Subagent: developer (làm), verifier (kiểm)
-.claude/skills/        Skill: clarify (làm rõ yêu cầu, chạy trong session chính)
-.claude/rules/         Quy tắc chi tiết cho Claude (giao tiếp, dữ liệu, engine, frontend, test…)
-CLAUDE.md              Hướng dẫn làm việc cho Claude trên dự án
+  archive/             Tài liệu cũ đã đóng băng (spec.md, PLAN.md, HANDOFF.md…), chỉ để tra cứu
+CLAUDE.md              Hướng dẫn làm việc cho Claude (file duy nhất luôn được nạp)
+.claude/rules/         Quy tắc theo vùng code (engine, ui, api-db, testing, docs), nạp khi mở file khớp
+.claude/skills/        Quy trình: execute-task, clarify, db-migration, release
+.claude/agents/        Subagent: implementer (làm task lớn), verifier (kiểm, chỉ viết test)
+.claude/hooks/         Chặn sửa file được bảo vệ, tự format sau khi sửa
 ```
 
 ## Bắt đầu
@@ -81,7 +83,7 @@ python3 fixtures/payroll-timesheet/generate.py
 
 CI (GitHub Actions) chạy install → lint → format:check → typecheck → test → build trên mỗi push/PR.
 
-### Đo hiệu năng trên máy thật (spec §31, AC-PF-06)
+### Đo hiệu năng trên máy thật (`docs/archive/spec.md` §31, AC-PF-06)
 
 Dùng để kết luận AC-B3-24 (laptop 8 GB). Chạy trên Windows hoặc macOS có cài Google Chrome; dữ liệu giả sinh tại chỗ (thư mục temp của máy), app chạy bản build cục bộ với Supabase giả lập, không gửi gì ra ngoài.
 

@@ -1,6 +1,8 @@
 # 00 — Product Vision
 
 > Status: approved direction (owner answers 2026-11-13: 1B, 2A, 3ABCD, 4A, 5C, 6B, 7 = refactor + rebuild agent system).
+> Execution changed the same day: **full rewrite in this repository** (ADR-012). Scope, users and
+> success criteria below are unchanged.
 > Product name in the UI: **HR Tools**. Repository name: HR Data Flow Platform.
 
 ## Problem
@@ -43,7 +45,7 @@ No third role. No self sign-up.
 - Flow and reference-table versioning by effective date; immutable published versions.
 - Admin screens: flows, versions, Designer, reference tables, users / groups / assignments, UI text overrides.
 - One shared design system (DS v3) used by every screen; Vietnamese UI with i18n structure.
-- This redesign: architecture boundaries, data-access layer, DS v3, agent system, ops safety. **No change to engine behaviour.**
+- This redesign: architecture boundaries, data-access layer, DS v3, agent system, ops safety. **No change to engine results** (the rewrite must reproduce them; `06-plan.md` §2 question 2 decides how that is proven).
 
 ## Out of scope
 
@@ -57,7 +59,7 @@ No third role. No self sign-up.
 
 | # | Criterion | Measured by |
 |---|-----------|-------------|
-| S1 | Refactor finishes with **identical results**: acceptance flow output and 182 formula golden cases unchanged | `pnpm test` (payroll-timesheet integration + formula-golden) |
+| S1 | The rewrite finishes with **identical results**: acceptance flow output and 182 formula golden cases unchanged | `pnpm test` (payroll-timesheet integration + formula-golden) |
 | S2 | No cross-feature import and no engine-internal import from the UI | `pnpm lint` (zone rules, `02-target-architecture.md` §3) |
 | S3 | Every screen uses only `ui/` components and DS v3 tokens; `components/` and v2 tokens deleted | `ds-v3.test.ts`, folder absent |
 | S4 | A new admin list screen is built from existing `ui/` parts with **0 new CSS values** and ≤ 150 lines of screen code | Check on the first screen built after the refactor |
@@ -69,6 +71,6 @@ No third role. No self sign-up.
 
 | ID | Type | Statement |
 |----|------|-----------|
-| A-00-1 | ASSUMPTION | "Refactor first": feature work (reference tables round 2, `output.template`) resumes after phase P4. The owner's answer to question 7 did not pick an order explicitly. |
+| A-00-1 | ASSUMPTION | "Rewrite first": feature work (reference tables round 2, `output.template`) resumes when the rewrite reaches parity with the legacy baseline. The owner did not pick an order explicitly. |
 | A-00-2 | ASSUMPTION | S7 targets are unchanged from the archived plan (`docs/archive/PLAN.md` §1). |
-| Q-00-1 | OPEN QUESTION | Which concrete visual traits of the current UI does the owner dislike (answer 3C)? DS v3 changes structure, density and scale; palette hue and typeface are kept as swappable theme values until the owner says otherwise (`04-ui-ux-system.md` §12). |
+| Q-00-1 | OPEN QUESTION | Which concrete visual traits of the current UI does the owner dislike (answer 3C)? DS v3 changes structure, density and scale; palette hue and typeface are kept as swappable theme values until the owner says otherwise (`04-ui-ux-system.md` §11). |

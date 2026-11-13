@@ -1,43 +1,12 @@
 ---
 name: clarify
-description: Làm rõ và chốt yêu cầu với Harold trước khi code một tính năng của HR Data Flow Platform — soạn câu hỏi A/B/C, viết user story + acceptance criteria, ghi quyết định vào docs/MEMORY.md và cập nhật docs/spec.md. Dùng khi có yêu cầu mới, yêu cầu mơ hồ, hoặc trả lời của Harold cần ghi lại.
+description: Clarify and settle a new or vague requirement with the owner before any code - fact-check first, ask A/B/C questions, write acceptance criteria, record the decision. Use for any request that is not already a task in the plan.
 ---
 
-# Làm rõ & chốt yêu cầu (chạy trong session chính)
-
-## 1. Phân tích
-
-- Đọc `docs/MEMORY.md` và đúng các mục liên quan của `docs/spec.md` (dùng Grep tìm heading, không đọc cả file).
-- Xác định: mục tiêu nghiệp vụ, vai trò (Admin/User), dữ liệu, rủi ro (dữ liệu cá nhân, hiệu năng, free tier, hạn mức).
-- Kiểm tra trước những gì kiểm được (code, tài liệu nhà cung cấp, đo thật) để câu hỏi dựa trên dữ kiện, gắn nhãn [Certain]/[High confidence]/[Speculative].
-- Yêu cầu mâu thuẫn MEMORY/spec → nêu mâu thuẫn ngay, hỏi Harold.
-
-## 2. Câu hỏi
-
-Chỉ hỏi điều ảnh hưởng thật đến thiết kế, tối đa 8 câu/vòng, sắp theo mức ảnh hưởng, đánh số nối tiếp các câu trước:
-
-```
-**N. <Câu hỏi>?**
-- **A *(đề xuất)*:** <lựa chọn>. <trade-off ngắn>
-- **B:** <lựa chọn>. <trade-off ngắn>
-- **C:** <tùy chọn>
-```
-
-Harold trả lời dạng "1A, 2B".
-
-## 3. Ghi quyết định
-
-Theo `.claude/rules/decision-log.md`:
-- Giờ: `TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M'`.
-- Thêm dòng vào **đầu** nhóm tương ứng; quyết định thay đổi → gạch dòng cũ `~~…~~ → thay bởi …`.
-- Cập nhật `docs/spec.md` cho khớp **cùng commit**; điều chưa chốt đưa vào §22 "Câu hỏi mở".
-
-## 4. User story + acceptance criteria
-
-- `Là <vai trò>, tôi muốn <hành động>, để <lợi ích>.`
-- AC kiểm thử được (Given/When/Then hoặc bảng `AC-…`), gồm case lỗi và edge case (file sai format, thiếu cột, dữ liệu rỗng, không có version hiệu lực, biên effective date).
-- Ghi vào section bước tương ứng trong spec (VD §26).
-
-## 5. Giao việc
-
-Khi giao `developer`/`verifier`, gửi **gói bối cảnh** ngắn: phạm vi, mục spec + AC cần đọc, dòng MEMORY liên quan, file chính, điểm rủi ro — để agent không phải đọc lại toàn bộ tài liệu.
+1. Analyse. Grep `docs/MEMORY.md` for the topic; read only the relevant sections of `docs/redesign/` (and `docs/archive/spec.md` when behaviour detail is needed). Identify the goal, the role (Admin / User), the data involved, the risks (personal data, performance, free tier, usage limit). Verify what can be verified in code or vendor docs first; label statements [Certain] / [High confidence] / [Speculative].
+2. Conflict with `docs/MEMORY.md` or `docs/redesign/` → state it at once and ask.
+3. Questions (Vietnamese): only those that change the design, at most 5 per round, ordered by impact:
+   `N. <question>?` then `A (đề xuất): … / B: … / C: …`, each with a one-line trade-off. The owner answers "1A, 2B".
+4. Record: one line per settled decision in `docs/MEMORY.md` (format in `CLAUDE.md`, "Decisions"); update the affected `docs/redesign/` file in the same commit; unsettled items go to that file's open-questions table.
+5. Write the work as tasks in the format of `docs/redesign/06-plan.md` §4 (goal, files, steps, acceptance criteria that can be tested, verification commands, rollback, size ≤ L) and add them to the plan with status `todo`. A task expected to need more than 12 acceptance criteria is split first.
+6. UI work: build an Artifact mock-up with fake data and get approval before the tasks are written.

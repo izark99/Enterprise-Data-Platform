@@ -38,6 +38,12 @@
 
 ## Kỹ thuật & tổ chức
 
+~~2026-11-13 12:55 - Cách thực thi (Harold trả lời câu 7): refactor + dựng lại hệ thống agent (CLAUDE.md, rules, skills, subagent, hooks) theo best practice của Anthropic; thiết kế ở `docs/redesign/08-agent-system.md`, dựng ở task T-P0-02. Quy trình developer → verifier hiện tại còn hiệu lực tới khi T-P0-02 xong.~~ → thay bởi 2026-11-13 17:48
+
+~~2026-10-30 12:51 - Đội agent theo mô hình generator–verifier: bỏ `requirements-analyst` (thay bằng skill `clarify` chạy trong session chính); gộp `tester` + `reviewer` thành `verifier` (test + review, chỉ viết file test); giữ `developer` cho vòng code lớn, sửa nhỏ session chính tự làm; giao việc kèm gói bối cảnh ngắn; mỗi lúc chỉ 1 subagent. Ghi trong `.claude/rules/workflow.md`.~~ → thay bởi 2026-11-13 17:48
+
+~~2026-10-28 07:46 - Do hạn mức gói có hạn: từ sau các vòng đang chạy (R3, R1b), mỗi thời điểm chỉ 1 developer chạy, các vòng code làm tuần tự; ghi trong `.claude/rules/workflow.md`.~~ → thay bởi 2026-11-13 17:48
+
 ~~2026-11-12 21:14 - Harold duyệt `docs/PLAN.md` (lộ trình M0 → M5) và cho đưa lên `main`.~~ → thay bởi 2026-11-13 12:55
 
 ~~2026-11-12 21:09 - Harold giao session chính vai trò project owner: lộ trình, mốc và nguyên tắc điều hành ghi ở `docs/PLAN.md` (đọc sau MEMORY, trước HANDOFF); bài học đã gặp ghi ở `.claude/rules/pitfalls.md` (luôn nạp). Mục nào của PLAN đổi một quyết định đã chốt (đánh dấu D-n) chỉ có hiệu lực sau khi Harold chốt và được ghi vào file này.~~ → thay bởi 2026-11-13 12:55

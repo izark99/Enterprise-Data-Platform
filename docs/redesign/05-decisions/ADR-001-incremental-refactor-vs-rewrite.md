@@ -1,6 +1,6 @@
 # ADR-001 — Incremental refactor, not a rewrite
 
-Status: Accepted · 2026-11-13
+Status: **Superseded by ADR-012** · 2026-11-13 (accepted earlier the same day)
 
 ## Context
 

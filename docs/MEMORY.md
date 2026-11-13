@@ -10,6 +10,8 @@
 
 ## Phạm vi & sản phẩm
 
+2026-11-13 17:48 - Chuyển dự án sang repo mới `Enterprise-Data-Platform` (Harold trả lời 2A, 3B): phạm vi sản phẩm giữ nguyên HR Tools như quyết định 2026-11-13 12:55; mã nguồn và tài liệu của repo cũ (`HR-System`, commit `fb1ba03`) được đưa sang thành 1 commit snapshot, không mang lịch sử git (lịch sử cũ nằm lại ở repo cũ). Kế hoạch và trạng thái từ nay ở `docs/redesign/06-plan.md` (thay `06-refactor-plan.md`).
+
 2026-11-13 12:55 - Thiết kế lại dự án (Harold trả lời 1B, 2A, 4A): lập đủ bộ tài liệu thiết kế tiếng Anh ở `docs/redesign/` (00–08 + ADR); phạm vi sản phẩm giữ nguyên: nền tảng chạy flow Excel trên trình duyệt, server không lưu dữ liệu nhân sự, không mở rộng sang lưu headcount/C&B/budget; người dùng 6 tháng tới: Harold + tối đa 5 người thử, giữ 2 role admin/user. Kế hoạch thực hiện: `docs/redesign/06-refactor-plan.md`.
 
 2026-11-12 21:14 - Thứ tự Phase 2: (1) bảng tham chiếu có effective date + node `input.refTable`; (2) `output.template` (template Excel); `code.python` (Pyodide) chỉ mở khi có một flow thật không viết được bằng `code.sql` + `transform.formula`. Các node Phase 2 khác chưa xếp thứ tự. Lộ trình chi tiết ở `docs/PLAN.md`.
@@ -240,11 +242,13 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-13 17:48 - Tinh gọn tài liệu và hệ thống agent theo best practice của Anthropic (Harold yêu cầu): đã dựng theo `docs/redesign/08-agent-system.md`: `CLAUDE.md` ngắn là file luôn nạp; rule theo vùng code chỉ nạp khi mở file khớp; quy trình nằm ở skill; quy tắc không ngoại lệ do hook chặn; session chính làm task S/M, subagent `implementer` cho task L, `verifier` kiểm cuối mỗi phase (chỉ viết test, có hook chặn); mỗi lúc 1 subagent; tài liệu cũ (spec, PLAN, HANDOFF, design-reference) đóng băng ở `docs/archive/`; trạng thái dự án chỉ ghi ở Progress Log của `docs/redesign/06-plan.md`. Hai điểm khác thiết kế ban đầu còn chờ Harold xác nhận: A-08-4, A-08-5 trong file 08.
+
+2026-11-13 17:48 - Cách thực thi (Harold trả lời 1C, 4C): **viết lại toàn bộ** ứng dụng ở repo mới, kể cả engine, thay cho refactor tăng dần (ADR-012 thay ADR-001); session đầu chỉ đưa code sang và xác nhận baseline (1.348 unit test đạt, khóa hành vi 188/188, JS khởi động 214,6 KiB), chưa bắt đầu task viết lại nào. Kế hoạch refactor 32 task cũ chuyển vào `docs/archive/refactor-plan-incremental.md`; kế hoạch viết lại chỉ lập sau khi Harold trả lời 5 câu hỏi ở `docs/redesign/06-plan.md` §2. Phần "dựng lại hệ thống agent theo best practice của Anthropic" của quyết định 2026-11-13 12:55 không đổi.
+
 2026-11-13 12:55 - Giao diện (Harold trả lời 3ABCD, 5C): thiết kế lại cả visual thành **một design system dùng chung** (token + component) để về sau phát triển thêm thì tái sử dụng, không lệch, không phải code lại; đặc tả ở `docs/redesign/04-ui-ux-system.md` (DS v3), Harold duyệt trên trang showcase ở 2 mốc GATE-1, GATE-2 trước khi chuyển màn. Các quyết định UI cũ bên dưới vẫn hiệu lực cho từng màn tới khi màn đó được chuyển sang DS v3 (task T-P3-08 sẽ chuyển chúng sang archive).
 
 2026-11-13 12:55 - Tài liệu hợp nhất (Harold trả lời 6B): `docs/redesign/` thay `docs/spec.md`, `docs/PLAN.md`, `docs/HANDOFF.md` (bản cũ chuyển vào `docs/archive/` ở task T-P0-01, chỉ để tra cứu); `CLAUDE.md` viết lại bằng tiếng Anh; `docs/MEMORY.md` giữ làm nhật ký quyết định (tiếng Việt); trạng thái dự án chỉ ghi ở Progress Log của `docs/redesign/06-refactor-plan.md`. Lộ trình sản phẩm M1–M5 của PLAN cũ được giữ lại thành backlog B-01…B-09 trong file đó.
-
-2026-11-13 12:55 - Cách thực thi (Harold trả lời câu 7): refactor + dựng lại hệ thống agent (CLAUDE.md, rules, skills, subagent, hooks) theo best practice của Anthropic; thiết kế ở `docs/redesign/08-agent-system.md`, dựng ở task T-P0-02. Quy trình developer → verifier hiện tại còn hiệu lực tới khi T-P0-02 xong.
 
 2026-11-12 21:14 - Ngân sách bundle: JS tải ban đầu (gzip) = entry chunk + các chunk tải ngay cùng entry (`<link rel="modulepreload">`) không vượt 240 KiB tuyệt đối (thay mốc +10% so với `d079f6b`); build thêm kiểm tra Monaco, React Flow, DuckDB, SheetJS, ExcelJS không nằm trong JS tải ban đầu (nhận diện bằng chuỗi đánh dấu khai báo trong `apps/web/bundle-budget.json`; chuỗi không còn thấy ở chunk nào cũng báo lỗi). Ngân sách CSS gzip (+10%) giữ nguyên.
 
@@ -333,10 +337,6 @@
 2026-10-30 13:26 - Quy tắc frontend đổi tên `.claude/rules/frontend.md` → `.claude/rules/design.md` (UI, design system, i18n, a11y).
 
 2026-10-30 13:26 - Đổi giao diện theo design language bản 2 làm vòng code riêng, ngay sau vòng R1 của `transform.formula`.
-
-2026-10-30 12:51 - Đội agent theo mô hình generator–verifier: bỏ `requirements-analyst` (thay bằng skill `clarify` chạy trong session chính); gộp `tester` + `reviewer` thành `verifier` (test + review, chỉ viết file test); giữ `developer` cho vòng code lớn, sửa nhỏ session chính tự làm; giao việc kèm gói bối cảnh ngắn; mỗi lúc chỉ 1 subagent. Ghi trong `.claude/rules/workflow.md`.
-
-2026-10-28 07:46 - Do hạn mức gói có hạn: từ sau các vòng đang chạy (R3, R1b), mỗi thời điểm chỉ 1 developer chạy, các vòng code làm tuần tự; ghi trong `.claude/rules/workflow.md`.
 
 2026-10-27 17:50 - Engine chuyển bảng sang dạng cột (columnar, dựa trên Arrow) trong vòng riêng R1b, chạy song song với R3; bước 3 chỉ xong khi 1 triệu dòng × 30 cột chạy được không crash trên Chromium.
 

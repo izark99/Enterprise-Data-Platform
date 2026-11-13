@@ -1,7 +1,7 @@
 # 02 — Target Architecture
 
-> The runtime architecture does **not** change (ADR-001, ADR-002). What changes is the module
-> structure inside `apps/web/src`, the rules between modules, and how they are enforced.
+> The runtime architecture does **not** change (ADR-002). What changes against the legacy baseline is
+> the module structure inside `apps/web/src`, the rules between modules, and how they are enforced.
 > `src/` means `apps/web/src/`.
 
 ## 1. System view
@@ -50,7 +50,7 @@ Features (top-level folders under `src/features/`): `auth`, `runner`, `designer`
 
 ## 3. Dependency rules
 
-`✓` allowed, `✗` forbidden. Enforced by ESLint `no-restricted-imports` zones (T-P0-05, T-P1-05).
+`✓` allowed, `✗` forbidden. Enforced by ESLint `no-restricted-imports` zones (ADR-003).
 
 | From ↓ / To → | app | own feature | other feature | shared | api | ui | engine public | engine internals | flow-schema |
 |---|---|---|---|---|---|---|---|---|---|
@@ -72,20 +72,20 @@ Definitions:
 ## 4. Target folder structure
 
 ```
-HR-System/
+repo root/
 ├─ CLAUDE.md                         operating manual for the executor (English, short)
 ├─ README.md                         human-facing overview + setup + backup/restore (Vietnamese)
 ├─ .claude/
 │  ├─ settings.json                  permissions (deny) + hooks
 │  ├─ hooks/                         protect-files.sh, verifier-test-only.sh, format.sh
-│  ├─ rules/                         core.md (always) · engine.md · ui.md · api-db.md · testing.md · docs.md (path-scoped)
+│  ├─ rules/                         engine.md · ui.md · api-db.md · testing.md · docs.md (all path-scoped)
 │  ├─ agents/                        implementer.md · verifier.md
-│  └─ skills/                        execute-task · clarify · add-node · ui-screen · db-migration · release
+│  └─ skills/                        execute-task · clarify · db-migration · release (+ add-node, ui-screen later: 08 A-08-5)
 ├─ docs/
 │  ├─ MEMORY.md                      decision journal (Vietnamese, append-only, not auto-loaded)
 │  ├─ MEMORY-archive.md              superseded decisions
 │  ├─ redesign/                      00 … 08 + 05-decisions/ (source of truth for design)
-│  └─ archive/                       spec.md, PLAN.md, HANDOFF.md, design-reference.md, patches/ (frozen reference)
+│  └─ archive/                       spec.md, PLAN.md, HANDOFF.md, design-reference.md, patches/, refactor-plan-incremental.md (frozen reference)
 ├─ apps/web/
 │  ├─ index.html, e2e-showcase.html, vite.config.ts, bundle-budget.json, build/, scripts/, public/
 │  └─ src/
@@ -105,8 +105,8 @@ HR-System/
 │     │     ├─ AdminLayout.tsx  nav.ts
 │     │     ├─ users/                UsersPage.tsx  GroupsPage.tsx  AssignmentsPage.tsx  {CreateUserDialog,EditUserDialog,TempPasswordDialog,GroupDialog}.tsx
 │     │     ├─ flows/                FlowsPage.tsx  ImportFlowDialog.tsx  CreateFlowDialog.tsx  versions/{FlowVersionsPage,DiffView,Timeline}.tsx  versions/version-diff.ts
-│     │     ├─ ref-tables/           (current files, restyled)
-│     │     └─ ui-text/              (current files, restyled)
+│     │     ├─ ref-tables/           (same screens as the legacy baseline)
+│     │     └─ ui-text/              (same screens as the legacy baseline)
 │     ├─ shared/
 │     │  ├─ auth/                    auth-service.ts  auth-context.tsx  guard.ts  credentials.ts  session-revoke.ts
 │     │  ├─ engine/                  engine-client.ts  activity.ts
@@ -129,17 +129,17 @@ HR-System/
 │     │  ├─ data/      DataTable.tsx  DataGrid.tsx  KpiCard.tsx  EmptyState.tsx  ErrorState.tsx  Skeleton.tsx  ProgressBar.tsx
 │     │  ├─ icons/index.tsx
 │     │  ├─ logic/     popover-position.ts  select-logic.ts  menu-logic.ts  tabs-logic.ts  calendar.ts  toast-store.ts
-│     │  └─ __tests__/ ds-v3.test.ts  v3-scope.ts  …
-│     ├─ engine/                     unchanged internally; + formula/public.ts, core/text-vars.ts
+│     │  └─ __tests__/ ds-v3.test.ts  …
+│     ├─ engine/                     core · io · duckdb · formula · nodes; public surface protocol.ts + formula/public.ts (A-02-2)
 │     ├─ locales/{vi,en}/
 │     └─ showcase/                   living style guide (E2E build only)
-├─ packages/flow-schema/             unchanged
+├─ packages/flow-schema/             Zod schemas: flow, slots, node configs
 ├─ supabase/                         unchanged layout; new migrations only via the db-migration skill
 ├─ e2e/                              user/ admin/ designer/ engine/ ui/ support/ __screenshots__/
 ├─ fixtures/  vendor/  scripts/  .github/workflows/
 ```
 
-Folders removed at the end of the refactor: `src/components/`, `src/lib/`, `docs/patches/` (moved), root-level `docs/spec.md`, `docs/PLAN.md`, `docs/HANDOFF.md`, `docs/design-reference.md` (moved).
+Legacy folders with no place in the target: `src/components/`, `src/lib/`.
 
 ## 5. Data flow — three most important use cases
 
@@ -276,9 +276,10 @@ No global store library. No data persisted in `localStorage` / IndexedDB except 
 
 | ID | Type | Statement |
 |----|------|-----------|
-| D-02-1 | DECISION | Runtime architecture unchanged; refactor is structural (ADR-001). |
+| D-02-1 | DECISION | Runtime architecture unchanged (ADR-002); the rewrite changes structure, not the runtime design (ADR-012). |
 | D-02-2 | DECISION | Six layers with the matrix in §3, enforced by ESLint (ADR-003). |
 | D-02-3 | DECISION | `api/` is the only Supabase caller; no query library (ADR-004). |
 | D-02-4 | DECISION | `admin` stays one feature module with four sub-folders. |
-| A-02-1 | ASSUMPTION | Rolldown tree-shakes the two engine public modules so the start-up JS does not grow; the bundle check in `pnpm build` proves or disproves it in T-P0-05. |
+| A-02-1 | ASSUMPTION | Rolldown tree-shakes the two engine public modules so the start-up JS does not grow; the bundle check in `pnpm build` proves or disproves it as soon as `formula/public.ts` exists. |
+| A-02-2 | ASSUMPTION | The rewritten engine keeps the legacy module split (`core`, `io`, `duckdb`, `formula`, `nodes`). Not decided by the owner; the rewrite plan may change it. |
 | Q-02-1 | OPEN QUESTION | None. |

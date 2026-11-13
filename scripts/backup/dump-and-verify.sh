@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Weekly backup of the Supabase database (spec §16, docs/PLAN.md M0.2).
+# Weekly backup of the Supabase database (docs/archive/spec.md §16; docs/redesign/05-decisions/ADR-010).
 #
 # 1. Dumps the DATA of schema `public` of the source database (flows, versions, reference tables,
 #    edited UI texts, accounts' profiles, groups, logs). The structure is not dumped: it lives in

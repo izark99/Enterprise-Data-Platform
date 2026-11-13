@@ -1,7 +1,7 @@
 # 07 — Conventions
 
-> Applies to all new and migrated code. Where existing code differs, it is brought in line only
-> when a task touches it. `src/` means `apps/web/src/`.
+> Applies to all new code. The legacy baseline differs in places: it is a behaviour reference, not
+> a model. `src/` means `apps/web/src/`.
 
 ## 1. Naming
 
@@ -56,7 +56,7 @@
 ## 5. API conventions (`src/api/`)
 
 ```ts
-// shape of every module (same as today's AdminApi / RefTablesApi, one class per resource)
+// shape of every module (the shape of the legacy AdminApi / RefTablesApi, one class per resource)
 export class GroupsApi {
   constructor(private readonly sb: GroupsClient) {}        // GroupsClient = Pick<Supabase, 'from'>: fakeable in tests
   async list(): Promise<Group[]> { … }
@@ -105,7 +105,7 @@ Not required: tests of pure presentation, snapshot tests of markup.
 ## 9. Commits and branches
 
 - Conventional Commits, English: `type(scope): subject` with `type` ∈ `feat | fix | refactor | test | docs | build | ci | chore`.
-- Plan tasks put the task ID in the subject: `refactor(api): T-P1-01 move Supabase access into src/api`.
+- Plan tasks put the task ID in the subject: `feat(ui): <task ID> Button and IconButton`.
 - One purpose per commit; a move-only commit contains no content change (so `git log --follow` works).
 - Never commit with failing lint, typecheck or unit tests. Never commit secrets or the company name.
 - Work on a feature branch; `main` moves only through the `release` skill.

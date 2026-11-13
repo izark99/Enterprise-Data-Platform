@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs every supabase/tests/*.sql against a database (docs/PLAN.md M0.1): the RLS, version,
+# Runs every supabase/tests/*.sql against a database (docs/redesign/05-decisions/ADR-010): the RLS, version,
 # reference table and UI text tests. Meant for the REAL Supabase project, where a local stand-in
 # cannot prove the privileges (Supabase grants its own defaults).
 #

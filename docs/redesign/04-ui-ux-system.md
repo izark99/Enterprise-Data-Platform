@@ -2,7 +2,8 @@
 
 > Owner decision 5C (2026-11-13): redesign the UI as **one shared system** so later development
 > reuses it, does not drift, and is not re-coded.
-> DS v3 replaces the v2 tokens in `apps/web/src/index.css` and the folder `src/components/`.
+> DS v3 replaces the v2 tokens (`apps/web/src/index.css`) and the folder `src/components/` of the
+> legacy baseline; the rewrite builds every screen on v3 from the start.
 > UI language: Vietnamese (i18n keys). This document is in English; Vietnamese strings shown are
 > existing labels from `src/locales/vi/common.json`.
 > `src/` means `apps/web/src/`.
@@ -110,7 +111,6 @@ src/ui/theme.css               @theme inline { … }        exposes semantic + d
   resolves at the element, inside whichever `[data-density]` container it sits in.
 - Primitives are **not** in `@theme`; no utility exists for them.
 - Adding a theme later (e.g. dark) = one more block in `semantic.css` under `[data-theme='…']`. Not built now.
-- During the migration the v2 `@theme` block stays in `index.css`; v3 token names never collide with v2 names. T-P3-08 deletes v2.
 
 ### 5.2 Colour — semantic tokens (light theme)
 
@@ -145,7 +145,7 @@ Tone type shared by components: `Tone = 'positive' | 'negative' | 'warning' | 'i
 
 ### 5.3 Typography
 
-Font: **Be Vietnam Pro**, self-hosted, weights **400 and 600 only** (500 and 700 files are removed in T-P3-08).
+Font: **Be Vietnam Pro**, self-hosted, weights **400 and 600 only** (the legacy 500 and 700 files are not carried over).
 Mono stack for `text-mono`: `ui-monospace, 'Cascadia Mono', Consolas, monospace` (Monaco keeps its own font).
 
 | Utility | Role | Comfortable (size/line) | Compact | Weight | Mobile < 768 (comfortable) |
@@ -353,51 +353,14 @@ Editable grids (reference-table draft) and the React Flow canvas stay in their f
 
 | Guard | What it fails on | Where |
 |-------|------------------|-------|
-| `src/ui/__tests__/ds-v3.test.ts` | In v3-scoped files: any hex / rgb colour, arbitrary value (`[...]`), Tailwind default palette / text / radius / shadow name, v2 token class, numeric spacing off the scale, `className` containing a `ui` internal class string, raw `<table>`, `<input type="file">`, `<dialog>`, `<main>` outside `ui/` | Vitest |
+| `src/ui/__tests__/ds-v3.test.ts` | In every `.tsx` file under `src/`: any hex / rgb colour, arbitrary value (`[...]`), Tailwind default palette / text / radius / shadow name, numeric spacing off the scale, `className` containing a `ui` internal class string, raw `<table>`, `<input type="file">`, `<dialog>`, `<main>` outside `ui/` | Vitest |
 | ESLint zones | `ui` importing app code; features importing `ui` internals other than the barrel and `ui/data/DataGrid` | `eslint.config.js` |
 | ESLint `no-restricted-syntax` | native `<select>`, native date inputs (existing rule) | `eslint.config.js` |
 | `e2e/layout-lint` | Geometry: same-height controls per row, no overflow, no overlap, one scrollbar per axis, gaps on scale — reads control heights from the density tokens | Playwright |
 | Screenshot baselines | 0-pixel diff for the screenshot specs | Playwright |
 | Bundle budget | Start-up JS, CSS size | `pnpm build` |
 
-`v3-scope.ts` lists the folders already migrated; the v2 guard (`components/__tests__/design-tokens.test.ts`) skips them and `ds-v3.test.ts` covers them. At the end the scope is all of `src/`.
-
-## 11. v2 → v3 mapping (for migration tasks)
-
-| v2 utility | v3 utility |
-|-----------|------------|
-| `text-ink` / `text-ink-soft` / `text-muted` | `text-fg-strong` / `text-fg-default` / `text-fg-muted` |
-| `bg-page` / `bg-card` / `bg-neutral` | `bg-surface-page` / `bg-surface-card` / `bg-surface-sunken` |
-| `border-line` / `border-line-input` | `border-line-subtle` / `border-line-control` |
-| `bg-teal-strong`, `hover:bg-teal-hover` | `Button variant="primary"` (never hand-built) |
-| `text-teal-strong` | `text-fg-link` (links) or `text-status-positive-fg` (status) |
-| `bg-teal-tint`, `bg-teal-tint-soft` | `bg-status-positive-bg` |
-| `text-coral-text` / `bg-coral-tint` | `text-status-negative-fg` / `bg-status-negative-bg` |
-| `text-amber-text` / `bg-amber-tint` | `text-status-warning-fg` / `bg-status-warning-bg` |
-| `text-blue-text` / `bg-blue-tint` | `text-status-info-fg` / `bg-status-info-bg` |
-| `bg-teal` / `bg-coral` / `bg-amber` / `bg-blue` | `bg-accent-teal` / `-coral` / `-amber` / `-blue` |
-| `bg-ink` | `bg-surface-inverse` (surface) — dark button = `Button variant="neutral"` |
-| `bg-drop-bg`, `border-drop-border` | `FileDrop` (never hand-built) |
-| `text-kpi` | `text-display` (inside `KpiCard`) |
-| `text-page-title`, `text-page-title-showcase` | `text-h1` (inside `PageHeader`) |
-| `text-title-md` | `text-h2` |
-| `text-title-sm`, `text-title-xs` | `text-h3` |
-| `text-body`, `text-dense` | `text-ui` |
-| `text-label`, `text-button`, `text-button-sm`, `text-dense-head` | `text-ui-strong` |
-| `text-caption` | `text-small` |
-| `text-eyebrow` | `text-overline` (inside `Overline`) |
-| `text-code` | `text-mono` |
-| `rounded-input` | `rounded-control` |
-| `rounded-card` | `rounded-container` (containers) / `rounded-control` (buttons) |
-| `rounded-pill` | `rounded-full` |
-| `shadow-float` | `shadow-overlay` |
-| `h-control` / `h-control-sm` / `min-h-target` | `h-ctl` / `h-ctl-sm` / `min-h-ctl` |
-| `h-row` | `min-h-tr` (inside `DataTable`) |
-| `px-page-x` / `pt-page-top` | `px-gutter` / `pt-page-y` (inside `PageShell`) |
-| `gap-section` / `gap-stack` / `gap-stack-dense` / `gap-inline` | `gap-block` / `gap-group` / `gap-group` / `gap-item` |
-| `cardClass`, `floatClass`, `inputClass`, `denseInputClass`, `thClass`, `tdClass`, `tdLineClass`, `buttonClass(...)`, `pillClass`, `navItemClass`, `denseThClass`, `denseTdClass`, `rowIconClass` … (exports of `components/ui.tsx`, `DataTable.tsx`, `RowActions.tsx`) | The corresponding `ui` component. Class-string exports do not exist in v3. |
-
-## 12. Decisions, assumptions, open questions
+## 11. Decisions, assumptions, open questions
 
 | ID | Type | Statement |
 |----|------|-----------|
@@ -405,8 +368,8 @@ Editable grids (reference-table draft) and the React Flow canvas stay in their f
 | D-04-2 | DECISION | Hue families (teal, coral, amber, blue, navy/slate) and the typeface are **kept**; what changes is structure, scale, density, radii, weights, component API and navigation. Reason: the owner has not said which visual traits are disliked (Q-00-1); with semantic tokens a palette or font swap is a one-file change after GATE-1. |
 | D-04-3 | DECISION | Admin and Designer use compact density (14 px text, 36 px controls); User screens stay comfortable (16 px, 44 px). |
 | D-04-4 | DECISION | Admin navigation is grouped; unbuilt entries are removed; users / groups / assignments become three routes. |
-| A-04-1 | ASSUMPTION | The owner accepts compact density in Admin although the 2026-11-06 13:05 decision asked for 44 px controls in the Designer panel. Confirmed or reversed at GATE-1 (T-P2-03); reversal = change two values in `density.css`. |
+| A-04-1 | ASSUMPTION | The owner accepts compact density in Admin although the 2026-11-06 13:05 decision asked for 44 px controls in the Designer panel. Confirmed or reversed at GATE-1; reversal = change two values in `density.css`. |
 | A-04-2 | ASSUMPTION | Group heading and new item labels in §3 are proposals; the owner can edit them in the "UI text" tab after release. |
-| A-04-3 | ASSUMPTION | `@theme inline` with variables overridden under `[data-density]` behaves as described in §5.1 (Tailwind documents `inline`; nested override is inferred). T-P2-01 proves it with a test before anything depends on it. |
+| A-04-3 | ASSUMPTION | `@theme inline` with variables overridden under `[data-density]` behaves as described in §5.1 (Tailwind documents `inline`; nested override is inferred). The first token task proves it with a test before anything depends on it. |
 | Q-04-1 | OPEN QUESTION | Should `status-positive` stay teal (same hue as the primary action) or become green? Default: stay teal. Decide at GATE-1. |
 | Q-04-2 | OPEN QUESTION | Mobile (390 px) support for Admin screens: default **not supported** (side nav collapses, tables scroll). |
