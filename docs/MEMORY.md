@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-13 18:12 - Bổ sung dependency cho T-R0-01 (Harold trả lời 1A, 2A): (1) thêm devDependency kiểu dữ liệu `@types/react ^19.2.0`, `@types/react-dom ^19.2.0` (React 19 không kèm type, thiếu thì `tsc` strict báo TS7016/TS7026); (2) phiên bản bộ ESLint lấy theo bản cũ: `@eslint/js ^10.0.1`, `typescript-eslint ^8.46.0`, `eslint-plugin-react-hooks ^7.1.1`, `eslint-config-prettier ^10.1.8`, `globals ^17.13.0`. Đã ghi vào `docs/redesign/02-target-architecture.md` §1.1.
+
 2026-11-13 18:08 - Không tác động repo cũ `HR-System` (Harold yêu cầu): không sửa, không commit, không push gì ở đó, kể cả khi repo được gắn vào session; mọi việc viết lại chỉ diễn ra ở repo `Enterprise-Data-Platform`.
 
 2026-11-13 18:04 - Viết lại ở repo mới (Harold trả lời 1C, câu 2, câu 3): (1) xóa toàn bộ code cũ khỏi repo ngay, dựng lại chỉ từ tài liệu; (2) engine làm lại từ đầu theo tài liệu, không port test cũ; (3) database làm lại từ đầu trên một project Supabase mới. Giữ lại vì là dữ liệu chứ không phải code: `fixtures/` (dữ liệu nghiệm thu), `vendor/`, bộ text tiếng Việt ở `docs/archive/locales-vi/`. Câu 4 (bộ E2E) và câu 5 (thời điểm chuyển production) Harold chưa trả lời; mặc định đang áp dụng và các câu 6–8 phát sinh ghi ở `docs/redesign/06-plan.md` §2.

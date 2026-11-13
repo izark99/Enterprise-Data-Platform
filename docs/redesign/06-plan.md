@@ -7,8 +7,8 @@
 ## 1. Status
 
 - 2026-11-13: full rewrite from the documents in this repository (ADR-012). The previous code was imported once, verified green (R-00), then removed from the tree (R-02). It stays readable in git: `git show 6fd5868:<path>`.
-- The tree holds documents, `fixtures/`, `vendor/` and the agent system. **No application code, no package manifest, no CI.**
-- Next task: **T-R0-01**.
+- The tree holds documents, `fixtures/`, `vendor/`, the agent system and the empty pnpm workspace of T-R0-01 (placeholder app, lint zones, the five checks). **No feature code, no CI yet.**
+- Next task: **T-R0-02**.
 
 ## 2. Owner decisions
 
@@ -157,6 +157,6 @@ Status values: `todo` · `in progress` · `waiting-owner` · `done` · `blocked`
 | R-00 Import previous implementation | done | 2026-11-13 | Commit `6fd5868`: one snapshot of the previous repository at `fb1ba03`, tree byte-identical (`diff -rq`). Measured here: lint, format:check, typecheck, build exit 0; unit tests 1,348 passed / 4 expected-fail / 12 skipped; fixtures 188 / 188; start-up JS 214.6 KiB gzip; CSS 38.5 KiB gzip; E2E `privacy` + `acceptance` + `auth` 10 / 10. Full E2E (517 tests in 52 files by `--list`) not run. |
 | R-01 Documents and agent system | done | 2026-11-13 | Commit `844301a`. Old documents frozen in `docs/archive/`; `CLAUDE.md` rewritten; rules, skills, subagents, hooks built (08). Verifier frontmatter hook not exercised with a live subagent. |
 | R-02 Remove previous code; rewrite plan | done | 2026-11-13 | 473 tracked files removed (`apps`, `packages`, `e2e`, `supabase`, `scripts`, `.github`, root tooling). Kept: `fixtures/` (14 files, unchanged), `vendor/` (2), `docs/archive/locales-vi/` (6 text files), old README in the archive. Stack versions and the full CSP copied into 02 before removal. Hook tests re-run: 08 §4. No runnable checks exist until T-R0-01. |
-| T-R0-01 | todo | | |
+| T-R0-01 | done | 2026-11-13 | pnpm 10.28.0 workspace (`@hrflow/web`, `@hrflow/flow-schema`), Node 22.23.4. Owner added `@types/react`, `@types/react-dom` and the ESLint-stack versions to 02 §1.1 (1A, 2A). Five checks exit 0; unit tests 2 / 2 (1 per package); start-up JS 219.6 KiB raw / 68.6 KiB gzip (Vite report, level-9 check comes in T-R0-02); CSS 1.47 KiB gzip. AC (a) `pnpm install --frozen-lockfile` exit 0 on a copy of the tracked files without `node_modules`; (b) 4 / 4 probes fail `pnpm lint` and were removed; (c) `git status --short fixtures/ vendor/` empty. Layer zones are `no-restricted-imports` regexes generated per folder depth (max 10) in `eslint.config.js`; the `engine-client.ts` exception of 02 §3 is not configured yet. No subagent used. |
 | T-R0-02 | todo | | |
 | T-R0-03 | todo | | |

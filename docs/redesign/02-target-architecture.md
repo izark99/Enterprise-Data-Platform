@@ -49,7 +49,8 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Designer | `@xyflow/react` (React Flow) · `monaco-editor` | 12.12.0 · 0.57.0 |
 | Server client | `@supabase/supabase-js` | 2.118.0 |
 | Tests | `vitest` · `@playwright/test` · `@axe-core/playwright` | ^5.1.0 · 1.64.1 · ^4.14.0 |
-| Lint, format | `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-config-prettier`, `globals` · `prettier` | ^10.14.0 (eslint) · ^3.6.2 |
+| Lint, format | `eslint` · `@eslint/js` · `typescript-eslint` · `eslint-plugin-react-hooks` · `eslint-config-prettier` · `globals` · `prettier` | ^10.14.0 · ^10.0.1 · ^8.46.0 · ^7.1.1 · ^10.1.8 · ^17.13.0 · ^3.6.2 |
+| Types (dev only) | `@types/react` · `@types/react-dom` | ^19.2.0 · ^19.2.0 |
 | Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
 | Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
 

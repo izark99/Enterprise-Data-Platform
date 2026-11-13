@@ -6,7 +6,7 @@ Owner and only maintainer: Harold (HR analytics, IT background).
 
 ## State of this repository
 
-- The app is being **rewritten from scratch, from the documents** (ADR-012, owner decision 2026-11-13). The previous implementation was removed from the tree; there is no application code yet.
+- The app is being **rewritten from scratch, from the documents** (ADR-012, owner decision 2026-11-13). The previous implementation was removed from the tree; only the empty workspace exists (T-R0-01: `apps/web`, `packages/flow-schema`, lint zones, checks).
 - The documents are the specification. `fixtures/` holds the acceptance data the new engine must reproduce. `vendor/` holds the vendored SheetJS tarball.
 - `docs/redesign/06-plan.md` holds the phases, the tasks of the current phase, the open owner decisions, and the Progress Log (the only project status). Read it at the start of every session. Run tasks with the `execute-task` skill, one task per session.
 - The previous repository (`HR-System`) is left exactly as it is: no edit, commit or push there, even when it is attached to the session.
@@ -14,8 +14,14 @@ Owner and only maintainer: Harold (HR analytics, IT background).
 
 ## Commands
 
-None yet. Task T-R0-01 creates the workspace and writes the real commands here. Until then the
-checks that exist are the hook tests in `docs/redesign/08-agent-system.md` §4.
+Node ≥ 22, pnpm 10, run from the repository root.
+
+- Install: `pnpm install --frozen-lockfile`
+- Dev server: `pnpm dev`
+- The five checks (all must exit 0): `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`
+- Fix formatting: `pnpm format`
+- One test file: `pnpm --filter @hrflow/web exec vitest run src/app/__tests__/App.test.tsx`
+- Hook tests: `docs/redesign/08-agent-system.md` §4
 
 ## Rules
 
