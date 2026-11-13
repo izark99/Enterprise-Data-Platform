@@ -38,6 +38,8 @@
 
 ## Kỹ thuật & tổ chức
 
+~~2026-11-13 18:35 - Chốt 3 điểm của T-R0-03 (Harold trả lời 1A, 2A, 3A): (1) giữ `<main>` bọc trang placeholder để axe đạt 0 violation, không tắt rule axe nào; (2) không cài `@types/node`: giá trị cần Node của cấu hình E2E đặt trong `e2e/support/node-env.mjs` (+ `.d.mts`), lệnh `pnpm typecheck` ở root kiểm thêm `e2e/` và `playwright.config.ts`; (3) 5 lỗi MINOR của verifier P0 (Q-06-3 trong `docs/redesign/06-plan.md`) đưa vào task của phase tương ứng khi chạy `clarify`, không mở task P0 bổ sung.~~ → thay bởi 2026-11-13 19:08 (điểm 2 đổi; điểm 1 và 3 chép lại nguyên ý vào dòng 2026-11-13 19:08)
+
 ~~2026-11-13 12:55 - Cách thực thi (Harold trả lời câu 7): refactor + dựng lại hệ thống agent (CLAUDE.md, rules, skills, subagent, hooks) theo best practice của Anthropic; thiết kế ở `docs/redesign/08-agent-system.md`, dựng ở task T-P0-02. Quy trình developer → verifier hiện tại còn hiệu lực tới khi T-P0-02 xong.~~ → thay bởi 2026-11-13 17:48
 
 ~~2026-10-30 12:51 - Đội agent theo mô hình generator–verifier: bỏ `requirements-analyst` (thay bằng skill `clarify` chạy trong session chính); gộp `tester` + `reviewer` thành `verifier` (test + review, chỉ viết file test); giữ `developer` cho vòng code lớn, sửa nhỏ session chính tự làm; giao việc kèm gói bối cảnh ngắn; mỗi lúc chỉ 1 subagent. Ghi trong `.claude/rules/workflow.md`.~~ → thay bởi 2026-11-13 17:48

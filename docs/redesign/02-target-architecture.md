@@ -50,11 +50,11 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Server client | `@supabase/supabase-js` | 2.118.0 |
 | Tests | `vitest` · `@playwright/test` · `@axe-core/playwright` | ^5.1.0 · 1.64.1 · ^4.14.0 |
 | Lint, format | `eslint` · `@eslint/js` · `typescript-eslint` · `eslint-plugin-react-hooks` · `eslint-config-prettier` · `globals` · `prettier` | ^10.14.0 · ^10.0.1 · ^8.46.0 · ^7.1.1 · ^10.1.8 · ^17.13.0 · ^3.6.2 |
-| Types (dev only) | `@types/react` · `@types/react-dom` | ^19.2.0 · ^19.2.0 |
+| Types (dev only) | `@types/react` · `@types/react-dom` · `@types/big.js` · `@types/node` | ^19.2.0 · ^19.2.0 · ^7.0.0 · ^22.18.0 |
 | Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
 | Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
 
-No `@types/node` (MEMORY 2026-11-13 18:35): Node-only values of the E2E config live in plain JavaScript (`e2e/support/node-env.mjs`, typed by `node-env.d.mts`); root `pnpm typecheck` also checks `e2e/` and `playwright.config.ts` (`e2e/tsconfig.json`).
+`@types/node` (MEMORY 2026-11-13 19:08) is visible only to test files (`__tests__`), `vite.config.ts` and build scripts/plugins; the app and engine tsconfigs keep `types: []`. The E2E tree does not use it: Node-only values of the E2E config live in plain JavaScript (`e2e/support/node-env.mjs`, typed by `node-env.d.mts`); root `pnpm typecheck` also checks `e2e/` and `playwright.config.ts` (`e2e/tsconfig.json`).
 
 ## 2. Layers and modules
 
@@ -317,6 +317,6 @@ No global store library. No data persisted in `localStorage` / IndexedDB except 
 | D-02-3 | DECISION | `api/` is the only Supabase caller; no query library (ADR-004). |
 | D-02-4 | DECISION | `admin` stays one feature module with four sub-folders. |
 | A-02-1 | ASSUMPTION | Rolldown tree-shakes the two engine public modules so the start-up JS does not grow; the bundle check in `pnpm build` proves or disproves it as soon as `formula/public.ts` exists. |
-| A-02-2 | ASSUMPTION | The engine uses the module split of the previous implementation (`core`, `io`, `duckdb`, `formula`, `nodes`). Not decided by the owner; the tasks of phase P1 may change it. |
+| A-02-2 | DECISION | The engine uses the module split `core`, `io`, `duckdb`, `formula`, `nodes` (owner 4A, MEMORY 2026-11-13 19:08; tasks T-R1-03…T-R1-10). |
 | A-02-3 | ASSUMPTION | The versions of §1.1 are those the previous implementation ran on (its manifests at commit `6fd5868`); they were not re-checked against today's releases. |
 | Q-02-1 | OPEN QUESTION | None. |
