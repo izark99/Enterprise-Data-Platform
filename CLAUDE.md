@@ -19,6 +19,7 @@ Node ≥ 22, pnpm 10, run from the repository root.
 - Install: `pnpm install --frozen-lockfile`
 - Dev server: `pnpm dev`
 - The five checks (all must exit 0): `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`
+- `pnpm build` ends with the bundle budget (`apps/web/bundle-budget.json`); numbers only, never failing: `pnpm --filter @hrflow/web exec node scripts/check-bundle-size.mjs --measure` (after a build)
 - Fix formatting: `pnpm format`
 - One test file: `pnpm --filter @hrflow/web exec vitest run src/app/__tests__/App.test.tsx`
 - Hook tests: `docs/redesign/08-agent-system.md` §4
