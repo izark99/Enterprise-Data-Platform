@@ -59,7 +59,7 @@ No third role. No self sign-up.
 
 | # | Criterion | Measured by |
 |---|-----------|-------------|
-| S1 | The rewrite finishes with **identical results**: acceptance flow output and 182 formula golden cases unchanged | `pnpm test` (payroll-timesheet integration + formula-golden) |
+| S1 | The rewrite finishes with **identical results**: acceptance flow output and the 180 formula golden cases unchanged (182 tests with the function-coverage check and the Excel comparison) | `pnpm test` (payroll-timesheet integration + formula-golden) |
 | S2 | No cross-feature import and no engine-internal import from the UI | `pnpm lint` (zone rules, `02-target-architecture.md` §3) |
 | S3 | Every screen uses only `ui/` components and DS v3 tokens; `components/` and v2 tokens deleted | `ds-v3.test.ts`, folder absent |
 | S4 | A new admin list screen is built from existing `ui/` parts with **0 new CSS values** and ≤ 150 lines of screen code | Check on the first screen built after the refactor |

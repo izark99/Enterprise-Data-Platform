@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-13 19:08 - Viết task P1 (Harold trả lời 1A, 2A, 3A, 4A, 5B): (1) cho phép `@types/node` làm devDependency, chỉ dùng trong file test (`__tests__`), `vite.config.ts` và script/plugin build; tsconfig của app và engine giữ `types: []`; phần E2E giữ cách 18:35 (giá trị cần Node đặt trong `e2e/support/node-env.mjs`); (2) thêm `@types/big.js ^7.0.0` vào 02 §1.1; (3) `cases.json` có 180 case (182 là số test: 180 case + kiểm độ phủ hàm + so với `golden-excel.xlsx`), sửa tài liệu, không sửa fixture; (4) P1 chia 10 task T-R1-01…T-R1-10 như `docs/redesign/06-plan.md` §6, giữ cách chia module engine `core`, `io`, `duckdb`, `formula`, `nodes`; (5) lần chạy 1.000.000 dòng × 30 cột là một job CI riêng (`perf`). Giữ nguyên từ quyết định 18:35: `<main>` bọc trang placeholder, không tắt rule axe nào; 5 lỗi MINOR của verifier P0 (Q-06-3) đưa vào task của phase tương ứng.
+
 2026-11-13 18:12 - Bổ sung dependency cho T-R0-01 (Harold trả lời 1A, 2A): (1) thêm devDependency kiểu dữ liệu `@types/react ^19.2.0`, `@types/react-dom ^19.2.0` (React 19 không kèm type, thiếu thì `tsc` strict báo TS7016/TS7026); (2) phiên bản bộ ESLint lấy theo bản cũ: `@eslint/js ^10.0.1`, `typescript-eslint ^8.46.0`, `eslint-plugin-react-hooks ^7.1.1`, `eslint-config-prettier ^10.1.8`, `globals ^17.13.0`. Đã ghi vào `docs/redesign/02-target-architecture.md` §1.1.
 
 2026-11-13 18:08 - Không tác động repo cũ `HR-System` (Harold yêu cầu): không sửa, không commit, không push gì ở đó, kể cả khi repo được gắn vào session; mọi việc viết lại chỉ diễn ra ở repo `Enterprise-Data-Platform`.
