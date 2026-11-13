@@ -54,7 +54,7 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
 | Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
 
-`@types/node` (MEMORY 2026-11-13 19:08) is visible only to test files (`__tests__`), `vite.config.ts` and build scripts/plugins; the app and engine tsconfigs keep `types: []`. The E2E tree does not use it: Node-only values of the E2E config live in plain JavaScript (`e2e/support/node-env.mjs`, typed by `node-env.d.mts`); root `pnpm typecheck` also checks `e2e/` and `playwright.config.ts` (`e2e/tsconfig.json`).
+`@types/node` (MEMORY 2026-11-13 19:08) is visible only to test files (`__tests__`), `vite.config.ts` and build scripts/plugins; the app and engine tsconfigs keep `types: []`. The E2E tree does not use it: Node-only values of the E2E config and specs (Chromium path, output dir, the production CSP read from `_headers`) live in plain JavaScript (`e2e/support/node-env.mjs`, typed by `node-env.d.mts`); root `pnpm typecheck` also checks `e2e/` and `playwright.config.ts` (`e2e/tsconfig.json`).
 
 ## 2. Layers and modules
 
@@ -264,7 +264,7 @@ Rules: no raw `error.message` from the server is rendered; no thrown string; eve
 | `SUPABASE_DB_URL`, `BACKUP_PASSPHRASE` | GitHub Actions secrets | Used only by `backup.yml`, `db-tests.yml` |
 | Bundle limits | `apps/web/bundle-budget.json` | Start-up JS ≤ 240 KiB gzip; CSS limit see ADR-005 |
 
-Security headers, served for `/*` from `apps/web/public/_headers` (`<ref>` = the Supabase project reference):
+Security headers, served for `/*` from `apps/web/public/_headers` (`<ref>` = the Supabase project reference). `vite preview` (and so E2E) sends the same `/*` headers, parsed from that file in `apps/web/vite.config.ts`, minus `Strict-Transport-Security` (it would pin `localhost` to HTTPS); `e2e/ui/csp.spec.ts` checks the CSP string and that the app loads without a violation:
 
 ```
 Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://<ref>.supabase.co wss://<ref>.supabase.co blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
