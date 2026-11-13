@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-13 18:35 - Chốt 3 điểm của T-R0-03 (Harold trả lời 1A, 2A, 3A): (1) giữ `<main>` bọc trang placeholder để axe đạt 0 violation, không tắt rule axe nào; (2) không cài `@types/node`: giá trị cần Node của cấu hình E2E đặt trong `e2e/support/node-env.mjs` (+ `.d.mts`), lệnh `pnpm typecheck` ở root kiểm thêm `e2e/` và `playwright.config.ts`; (3) 5 lỗi MINOR của verifier P0 (Q-06-3 trong `docs/redesign/06-plan.md`) đưa vào task của phase tương ứng khi chạy `clarify`, không mở task P0 bổ sung.
+
 2026-11-13 18:12 - Bổ sung dependency cho T-R0-01 (Harold trả lời 1A, 2A): (1) thêm devDependency kiểu dữ liệu `@types/react ^19.2.0`, `@types/react-dom ^19.2.0` (React 19 không kèm type, thiếu thì `tsc` strict báo TS7016/TS7026); (2) phiên bản bộ ESLint lấy theo bản cũ: `@eslint/js ^10.0.1`, `typescript-eslint ^8.46.0`, `eslint-plugin-react-hooks ^7.1.1`, `eslint-config-prettier ^10.1.8`, `globals ^17.13.0`. Đã ghi vào `docs/redesign/02-target-architecture.md` §1.1.
 
 2026-11-13 18:08 - Không tác động repo cũ `HR-System` (Harold yêu cầu): không sửa, không commit, không push gì ở đó, kể cả khi repo được gắn vào session; mọi việc viết lại chỉ diễn ra ở repo `Enterprise-Data-Platform`.

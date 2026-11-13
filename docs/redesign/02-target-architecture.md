@@ -54,6 +54,8 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
 | Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
 
+No `@types/node` (MEMORY 2026-11-13 18:35): Node-only values of the E2E config live in plain JavaScript (`e2e/support/node-env.mjs`, typed by `node-env.d.mts`); root `pnpm typecheck` also checks `e2e/` and `playwright.config.ts` (`e2e/tsconfig.json`).
+
 ## 2. Layers and modules
 
 | Layer | Folder | Responsibility | May contain |
