@@ -9,6 +9,7 @@ Owner and only maintainer: Harold (HR analytics, IT background).
 - The app is being **rewritten from scratch, from the documents** (ADR-012, owner decision 2026-11-13). The previous implementation was removed from the tree; there is no application code yet.
 - The documents are the specification. `fixtures/` holds the acceptance data the new engine must reproduce. `vendor/` holds the vendored SheetJS tarball.
 - `docs/redesign/06-plan.md` holds the phases, the tasks of the current phase, the open owner decisions, and the Progress Log (the only project status). Read it at the start of every session. Run tasks with the `execute-task` skill, one task per session.
+- The previous repository (`HR-System`) is left exactly as it is: no edit, commit or push there, even when it is attached to the session.
 - When the documents do not answer a question: ask the owner, or read the previous implementation in git (`git show 6fd5868:<path>`) to learn the behaviour, then write the answer into the documents. Never paste old code back.
 
 ## Commands

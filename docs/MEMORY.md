@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-13 18:08 - Không tác động repo cũ `HR-System` (Harold yêu cầu): không sửa, không commit, không push gì ở đó, kể cả khi repo được gắn vào session; mọi việc viết lại chỉ diễn ra ở repo `Enterprise-Data-Platform`.
+
 2026-11-13 18:04 - Viết lại ở repo mới (Harold trả lời 1C, câu 2, câu 3): (1) xóa toàn bộ code cũ khỏi repo ngay, dựng lại chỉ từ tài liệu; (2) engine làm lại từ đầu theo tài liệu, không port test cũ; (3) database làm lại từ đầu trên một project Supabase mới. Giữ lại vì là dữ liệu chứ không phải code: `fixtures/` (dữ liệu nghiệm thu), `vendor/`, bộ text tiếng Việt ở `docs/archive/locales-vi/`. Câu 4 (bộ E2E) và câu 5 (thời điểm chuyển production) Harold chưa trả lời; mặc định đang áp dụng và các câu 6–8 phát sinh ghi ở `docs/redesign/06-plan.md` §2.
 
 2026-11-13 17:48 - Tinh gọn tài liệu và hệ thống agent theo best practice của Anthropic (Harold yêu cầu): đã dựng theo `docs/redesign/08-agent-system.md`: `CLAUDE.md` ngắn là file luôn nạp; rule theo vùng code chỉ nạp khi mở file khớp; quy trình nằm ở skill; quy tắc không ngoại lệ do hook chặn; session chính làm task S/M, subagent `implementer` cho task L, `verifier` kiểm cuối mỗi phase (chỉ viết test, có hook chặn); mỗi lúc 1 subagent; tài liệu cũ (spec, PLAN, HANDOFF, design-reference) đóng băng ở `docs/archive/`; trạng thái dự án chỉ ghi ở Progress Log của `docs/redesign/06-plan.md`. Hai điểm khác thiết kế ban đầu còn chờ Harold xác nhận: A-08-4, A-08-5 trong file 08.
