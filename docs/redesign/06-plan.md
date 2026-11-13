@@ -7,8 +7,8 @@
 ## 1. Status
 
 - 2026-11-13: full rewrite from the documents in this repository (ADR-012). The previous code was imported once, verified green (R-00), then removed from the tree (R-02). It stays readable in git: `git show 6fd5868:<path>`.
-- The tree holds documents, `fixtures/`, `vendor/`, the agent system and the empty pnpm workspace of T-R0-01 (placeholder app, lint zones, the five checks). **No feature code, no CI yet.**
-- Next task: **T-R0-02**.
+- The tree holds documents, `fixtures/`, `vendor/`, the agent system, the empty pnpm workspace of T-R0-01 (placeholder app, lint zones, the five checks) and the T-R0-02 limits (bundle budget in `pnpm build`, `apps/web/public/_headers` guarded by `headers.test.ts`). **No feature code, no CI yet.**
+- Next task: **T-R0-03**.
 
 ## 2. Owner decisions
 
@@ -158,5 +158,5 @@ Status values: `todo` · `in progress` · `waiting-owner` · `done` · `blocked`
 | R-01 Documents and agent system | done | 2026-11-13 | Commit `844301a`. Old documents frozen in `docs/archive/`; `CLAUDE.md` rewritten; rules, skills, subagents, hooks built (08). Verifier frontmatter hook not exercised with a live subagent. |
 | R-02 Remove previous code; rewrite plan | done | 2026-11-13 | 473 tracked files removed (`apps`, `packages`, `e2e`, `supabase`, `scripts`, `.github`, root tooling). Kept: `fixtures/` (14 files, unchanged), `vendor/` (2), `docs/archive/locales-vi/` (6 text files), old README in the archive. Stack versions and the full CSP copied into 02 before removal. Hook tests re-run: 08 §4. No runnable checks exist until T-R0-01. |
 | T-R0-01 | done | 2026-11-13 | pnpm 10.28.0 workspace (`@hrflow/web`, `@hrflow/flow-schema`), Node 22.23.4. Owner added `@types/react`, `@types/react-dom` and the ESLint-stack versions to 02 §1.1 (1A, 2A). Five checks exit 0; unit tests 2 / 2 (1 per package); start-up JS 219.6 KiB raw / 68.6 KiB gzip (Vite report, level-9 check comes in T-R0-02); CSS 1.47 KiB gzip. AC (a) `pnpm install --frozen-lockfile` exit 0 on a copy of the tracked files without `node_modules`; (b) 4 / 4 probes fail `pnpm lint` and were removed; (c) `git status --short fixtures/ vendor/` empty. Layer zones are `no-restricted-imports` regexes generated per folder depth (max 10) in `eslint.config.js`; the `engine-client.ts` exception of 02 §3 is not configured yet. No subagent used. |
-| T-R0-02 | todo | | |
+| T-R0-02 | done | 2026-11-13 | `pnpm build` runs `apps/web/scripts/check-bundle-size.mjs`: `bundle-budget: OK start-up JS 66.2 KiB gzip in 1 file(s) (limit 240.0 KiB, zlib level 9); CSS 1.4 KiB gzip in 1 file(s)`; the 5 heavy libraries reported "not present" (none installed), so the marker check (markers taken from the previous `bundle-budget.json`) is not yet exercised on a real library. CSS is printed only (no limit in this task). `_headers` = 02 §6.3 with `connect-src 'self' blob:`. Five checks exit 0; unit tests 5 / 5 (web 4, flow-schema 1). AC (a) recorded above; (b) `https://example.com` in `connect-src` → `pnpm test` 1 failed / 3 passed, then reverted. Extra probes: `'unsafe-eval'` in `script-src` and a missing COOP header each fail the test; a 10 KiB limit makes the check exit 1, `--measure` exits 0. The test reads `_headers` via Vite `?raw` (no `@types/node`); the script imports `node:process` (no ESLint config change). No subagent used. |
 | T-R0-03 | todo | | |

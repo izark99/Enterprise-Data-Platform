@@ -1,0 +1,11 @@
+{
+  "startupJsLimitGzipBytes": 245760,
+  "startupJsNote": "240 KiB gzip (zlib level 9) for the JS loaded at start-up: entry + modulepreload chunks of dist/index.html. 02-target-architecture.md §7.",
+  "notInStartupJs": [
+    { "library": "monaco-editor", "package": "monaco-editor", "marker": "MonacoEnvironment" },
+    { "library": "React Flow", "package": "@xyflow/react", "marker": "react-flow__" },
+    { "library": "DuckDB-WASM", "package": "@duckdb/duckdb-wasm", "marker": "duckdb_web" },
+    { "library": "SheetJS", "package": "xlsx", "marker": "SheetJS" },
+    { "library": "ExcelJS", "package": "exceljs", "marker": "ExcelJS" }
+  ]
+}
