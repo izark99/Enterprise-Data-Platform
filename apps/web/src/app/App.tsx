@@ -2,5 +2,9 @@
 export const APP_TITLE = 'HR Tools';
 
 export function App() {
-  return <h1>{APP_TITLE}</h1>;
+  return (
+    <main>
+      <h1>{APP_TITLE}</h1>
+    </main>
+  );
 }

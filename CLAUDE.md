@@ -22,6 +22,8 @@ Node ≥ 22, pnpm 10, run from the repository root.
 - `pnpm build` ends with the bundle budget (`apps/web/bundle-budget.json`); numbers only, never failing: `pnpm --filter @hrflow/web exec node scripts/check-bundle-size.mjs --measure` (after a build)
 - Fix formatting: `pnpm format`
 - One test file: `pnpm --filter @hrflow/web exec vitest run src/app/__tests__/App.test.tsx`
+- E2E (builds with `build:e2e`, then Playwright against `vite preview`; traces off, output in the OS temp dir; uses `/opt/pw-browsers/chromium` when present, never run `playwright install` there): `pnpm test:e2e`
+- One E2E spec: `pnpm --filter @hrflow/web build:e2e && pnpm exec playwright test e2e/user/privacy.spec.ts`
 - Hook tests: `docs/redesign/08-agent-system.md` §4
 
 ## Rules
