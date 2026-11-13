@@ -1,0 +1,371 @@
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import { Tooltip } from './Tooltip';
+
+/** Small set of primitives implementing spec §25.3 on top of the theme tokens in index.css. */
+
+export type Tone = 'teal' | 'coral' | 'amber' | 'blue' | 'neutral';
+
+export const toneText: Record<Tone, string> = {
+  teal: 'text-teal-strong',
+  coral: 'text-coral-text',
+  amber: 'text-amber-text',
+  blue: 'text-blue-text',
+  neutral: 'text-ink-soft',
+};
+
+export const toneTint: Record<Tone, string> = {
+  teal: 'bg-teal-tint',
+  coral: 'bg-coral-tint',
+  amber: 'bg-amber-tint',
+  blue: 'bg-blue-tint',
+  neutral: 'bg-neutral',
+};
+
+export function cx(...parts: (string | false | null | undefined)[]): string {
+  return parts.filter(Boolean).join(' ');
+}
+
+/** Level-1 surface (§25.3): white, 12px radius, 1px #E2E8F0 border, no shadow. */
+export const cardClass = 'rounded-card border border-line bg-card';
+
+/** Level-2 floating layer: popover, menu, dialog, toast. */
+export const floatClass = 'rounded-card border border-line bg-card shadow-float';
+
+/**
+ * Text-like control (§25.3 Input): 44px, 6px radius, 1px #475569 border, `body`; focus = teal
+ * border + 3px #DDF5EF ring; `aria-invalid` = coral border.
+ */
+const inputFrame =
+  'min-w-0 rounded-input border border-line-input bg-card px-4 text-body text-ink ' +
+  'focus:border-teal-strong focus:ring-3 focus:ring-teal-tint focus:outline-none ' +
+  'aria-invalid:border-coral-text disabled:bg-neutral disabled:text-muted';
+export const inputClass = `h-control ${inputFrame}`;
+/** Multi-line variant of `inputClass` (height from `rows`). */
+export const textareaClass = `py-3 ${inputFrame}`;
+
+/**
+ * Dense variant for the Designer side form (MEMORY 2026-10-30 13:29: 14px text there); same frame
+ * (radius, border, focus) and the same 44px height as `inputClass` (MEMORY 2026-11-06 13:05).
+ */
+export const denseInputClass =
+  'h-control min-w-0 rounded-input border border-line-input bg-card px-3 text-dense text-ink ' +
+  'focus:border-teal-strong focus:ring-3 focus:ring-teal-tint focus:outline-none ' +
+  'aria-invalid:border-coral-text disabled:bg-neutral disabled:text-muted';
+
+/**
+ * Left-menu item (§25.3 "Menu trái"): 44px, 6px radius; the current item has a teal tint, teal
+ * 600 text and a 3px teal bar on the left.
+ */
+export function navItemClass(active: boolean): string {
+  return cx(
+    'flex min-h-target items-center rounded-input border-l-3 px-4 text-body whitespace-nowrap no-underline',
+    active
+      ? 'border-teal-strong bg-teal-tint font-semibold text-teal-strong hover:text-teal-strong'
+      : 'border-transparent text-ink-soft hover:bg-neutral hover:text-ink',
+  );
+}
+
+/** Pill tab / filter toggle (§25.3 "Tab"): the selected one has a tint and strong text. */
+export function pillClass(selected: boolean): string {
+  return cx(
+    'inline-flex min-h-target items-center rounded-pill px-4 text-body',
+    selected
+      ? 'bg-teal-tint font-semibold text-teal-strong'
+      : 'border border-line-input bg-card text-ink-soft hover:bg-neutral',
+  );
+}
+
+/**
+ * Checkbox / radio box (AC-UI-78 rule 10): 20px everywhere and never shrunk by a long label
+ * beside it.
+ */
+export const checkboxClass = 'size-5 shrink-0 accent-teal-strong';
+
+/** Form label (§25.1 `label`: 16px / 600). */
+export const labelClass = 'text-label text-ink';
+
+/** Table header cell of an admin/user table (§25.3: `caption` 600 #475569 on #F1F5F9). */
+export const thClass =
+  'border-b border-line bg-neutral px-4 py-3 text-left text-caption font-semibold whitespace-nowrap text-muted';
+
+/** Body cell of a table (12px 16px padding; type size and colour come from the `<table>`). */
+export const tdClass = 'border-b border-line px-4 py-3 align-top';
+
+/**
+ * Admin table cell (AC-UI-57): one line, vertically centred, so every row has the same height.
+ * Text is never cut: columns size to their content and a table wider than its card scrolls
+ * sideways inside its region, with the action column pinned to the right edge.
+ */
+export const tdLineClass = 'border-b border-line px-4 py-3 align-middle whitespace-nowrap';
+
+/** Header cell of an admin table: one line, full text. */
+export const thLineClass = thClass;
+
+/** One-line cell text, shown in full (line breaks of change notes collapse into spaces). */
+export function CellText({ text, className }: { text: string; className?: string }) {
+  return <span className={className}>{text.replace(/\s+/g, ' ').trim()}</span>;
+}
+
+/** Cell holding row actions (small buttons): tighter vertical padding. */
+export const tdActionClass = 'border-b border-line px-2 py-1 align-middle';
+
+const buttonBase =
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-card whitespace-nowrap ' +
+  // Colors animate only for hover/press. A disabled→enabled change must snap: a fade would leave
+  // white text on a pale mid-transition teal (contrast below WCAG AA) for a moment.
+  'transition-none hover:transition-colors active:transition-colors disabled:cursor-not-allowed';
+
+/**
+ * Height + type per size (§25.3): md 44px / `button`, sm 36px / `button-sm` (tables, toolbars),
+ * dense 44px with 14px/600 type (standard button of a dense Designer form, MEMORY 2026-11-06).
+ */
+export const buttonSize = {
+  md: 'min-h-control px-6 text-button',
+  sm: 'min-h-control-sm px-4 text-button-sm',
+  dense: 'min-h-control px-4 text-dense font-semibold',
+} as const;
+
+export type ButtonVariant = 'primary' | 'dark' | 'outline' | 'text' | 'danger';
+export type ButtonSize = keyof typeof buttonSize;
+
+/** Colors per variant (§25.3). White text only on #0F766E and #1F2A44 (WCAG AA). */
+const buttonTone: Record<ButtonVariant, string> = {
+  primary: 'bg-teal-strong text-white hover:bg-teal-hover disabled:bg-line disabled:text-muted',
+  dark: 'bg-ink text-white hover:bg-ink-soft disabled:bg-line disabled:text-muted',
+  outline:
+    'border border-ink bg-card text-ink hover:bg-neutral disabled:border-line-input disabled:text-muted',
+  text: 'bg-transparent text-ink hover:bg-neutral disabled:text-muted',
+  danger:
+    'border border-coral-text bg-card text-coral-text hover:bg-coral-tint disabled:border-line-input disabled:text-muted',
+};
+
+/** Class string of a button-looking element (also for `<Link>`/`<a>` styled as a button). */
+export function buttonClass(variant: ButtonVariant = 'outline', size: ButtonSize = 'md'): string {
+  // The text button keeps `button-sm` type and 8px 16px padding at every size (§25.3).
+  const sizing =
+    variant === 'text'
+      ? cx(size === 'sm' ? 'min-h-control-sm' : 'min-h-control', 'px-4 py-2 text-button-sm')
+      : buttonSize[size];
+  return cx(buttonBase, sizing, buttonTone[variant]);
+}
+
+export function Button({
+  variant = 'outline',
+  size = 'md',
+  className,
+  type = 'button',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  // `data-size`: the small (36px) button is a marked exception of AC-UI-78 rule 8.
+  return (
+    <button
+      type={type}
+      data-size={size}
+      className={cx(buttonClass(variant, size), className)}
+      {...props}
+    />
+  );
+}
+
+export function Card({
+  as: As = 'section',
+  className,
+  children,
+  ...rest
+}: {
+  as?: 'section' | 'article' | 'div';
+  className?: string;
+  children: ReactNode;
+  'aria-labelledby'?: string;
+  'aria-label'?: string;
+}) {
+  return (
+    <As data-card className={cx(cardClass, 'p-6', className)} {...rest}>
+      {children}
+    </As>
+  );
+}
+
+/** Uppercase, letter-spaced label above a page title (§25.3): no background, tone colour only. */
+export function Eyebrow({ tone = 'teal', children }: { tone?: Tone; children: ReactNode }) {
+  return (
+    <span data-eyebrow className={cx('self-start text-eyebrow uppercase', toneText[tone])}>
+      {children}
+    </span>
+  );
+}
+
+export function Chip({ tone, children }: { tone: Tone; children: ReactNode }) {
+  return (
+    <span
+      data-chip
+      className={cx(
+        'inline-flex items-center rounded-pill px-3 py-1 text-caption font-semibold whitespace-nowrap',
+        toneText[tone],
+        toneTint[tone],
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Tinted callout that starts with a bold label ("An toàn dữ liệu:", "Lưu ý:"). */
+export function Callout({
+  tone,
+  label,
+  icon,
+  children,
+  role,
+  size = 'body',
+  className,
+}: {
+  tone: Tone;
+  label: string;
+  icon?: ReactNode;
+  children?: ReactNode;
+  role?: 'status' | 'alert';
+  /** `caption` for secondary notes (e.g. the data-safety line under a form). */
+  size?: 'body' | 'caption';
+  className?: string;
+}) {
+  return (
+    <div
+      role={role}
+      className={cx(
+        'flex items-start gap-3 rounded-card px-4 py-3 text-ink-soft',
+        size === 'body' ? 'text-body' : 'text-caption',
+        toneTint[tone],
+        className,
+      )}
+    >
+      {icon}
+      <p className="m-0">
+        <b className={toneText[tone]}>{label}</b> {children}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * One-line text cut with "…" (MEMORY 2026-11-03 10:49: titles holding a user-given name). The DOM
+ * keeps the full text, so screen readers read all of it; when the text is actually cut, the
+ * element becomes focusable and a tooltip with the full text shows on hover and focus.
+ *
+ * Stacked Vietnamese marks (Ổ, Ẫ) and dots below (Ợ) reach outside a line box whose height equals
+ * the font size; the 20px padding (cancelled by a negative margin, so layout is unchanged) keeps
+ * them inside the clipping box.
+ */
+/**
+ * Whether the one-line text of `ref` is cut (wider than its box); re-checked when the box resizes,
+ * a web font finishes loading or `text` changes. For "…" + tooltip (AC-UI-78 rule 7).
+ */
+export function useTextCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
+  const [cut, setCut] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let live = true;
+    const check = () => {
+      if (live) setCut(el.scrollWidth > el.clientWidth + 1);
+    };
+    check();
+    // A box of fixed width does not resize when the web font arrives, but its text does.
+    const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+    void fonts?.ready.then(check);
+    fonts?.addEventListener?.('loadingdone', check);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(check);
+    observer?.observe(el);
+    return () => {
+      live = false;
+      fonts?.removeEventListener?.('loadingdone', check);
+      observer?.disconnect();
+    };
+  }, [ref, text]);
+  return cut;
+}
+
+export function OneLine({
+  as: As = 'span',
+  text,
+  className,
+  wrapperClassName,
+}: {
+  as?: 'span' | 'h1';
+  text: string;
+  className?: string;
+  wrapperClassName?: string;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  const cut = useTextCut(ref, text);
+  return (
+    <Tooltip
+      text={cut ? text : null}
+      as={As === 'h1' ? 'div' : 'span'}
+      className={cx('block min-w-0', wrapperClassName)}
+    >
+      <As
+        ref={ref as never}
+        data-one-line
+        data-cut={cut || undefined}
+        tabIndex={cut ? 0 : undefined}
+        className={cx('-my-5 block truncate py-5', className)}
+      >
+        {text}
+      </As>
+    </Tooltip>
+  );
+}
+
+/**
+ * A file name on one line (MEMORY 2026-11-06 18:27): when it does not fit, the middle is cut with
+ * "…" and the end (`tail` characters, usually the part that tells files apart and the extension)
+ * stays; the whole name shows on hover / focus (`Tooltip`, AC-UI-78 rule 7).
+ */
+export function MiddleCut({
+  text,
+  tail = 12,
+  className,
+}: {
+  text: string;
+  tail?: number;
+  className?: string;
+}) {
+  const head = useRef<HTMLSpanElement>(null);
+  const end = useRef<HTMLSpanElement>(null);
+  const split = text.length > tail + 4 ? text.length - tail : text.length;
+  const headCut = useTextCut(head, text);
+  const endCut = useTextCut(end, text);
+  const cut = headCut || (split < text.length && endCut);
+  return (
+    <Tooltip text={cut ? text : null} className={cx('flex min-w-0', className)}>
+      {/* The start gives way first; the end only when the start is gone (very narrow box). */}
+      <span
+        ref={head}
+        data-one-line
+        data-cut={cut || undefined}
+        tabIndex={cut ? 0 : undefined}
+        className="-my-5 block min-w-0 shrink-[1000] truncate py-5"
+      >
+        {text.slice(0, split)}
+      </span>
+      {split < text.length && (
+        <span
+          ref={end}
+          data-one-line
+          data-cut={cut || undefined}
+          className="-my-5 block max-w-full shrink-0 truncate py-5"
+        >
+          {text.slice(split)}
+        </span>
+      )}
+    </Tooltip>
+  );
+}

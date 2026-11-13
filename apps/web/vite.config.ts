@@ -1,0 +1,80 @@
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { defineConfig } from 'vitest/config';
+import { DUCKDB_DIST, duckDbManifestModule, duckDbWasm } from './build/duckdb-wasm';
+
+/**
+ * Headers of the `/*` block in public/_headers (Cloudflare Pages format), so `vite preview` —
+ * used by the E2E tests — serves the same CSP as production.
+ */
+function pagesHeaders(): Record<string, string> {
+  const lines = readFileSync(resolve(import.meta.dirname, 'public/_headers'), 'utf8').split('\n');
+  const headers: Record<string, string> = {};
+  let inBlock = false;
+  for (const line of lines) {
+    if (line.startsWith('#') || line.trim() === '') continue;
+    if (!/^\s/.test(line)) {
+      inBlock = line.trim() === '/*';
+      continue;
+    }
+    const i = line.indexOf(':');
+    if (inBlock && i > 0) headers[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  // HSTS on localhost would pin http://localhost to https in the test browser profile.
+  delete headers['Strict-Transport-Security'];
+  return headers;
+}
+
+/**
+ * `vite build --mode e2e`: production build pointed at the real project URL (the only Supabase
+ * origin the CSP allows) with a FAKE publishable key. Playwright intercepts every request to that
+ * origin (e2e/supabase-mock.ts), so E2E never reaches the real project.
+ */
+const E2E_ENV = {
+  'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://rzakjtgvbyxqsmbpcomw.supabase.co'),
+  'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('sb_publishable_e2e_fake_key'),
+};
+
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), duckDbWasm()],
+  resolve: {
+    alias: {
+      // DuckDB-WASM's synchronous browser bindings, run inside the engine worker (spec §13.1).
+      '@hrflow/duckdb-browser-blocking': resolve(DUCKDB_DIST, 'duckdb-browser-blocking.mjs'),
+      // Monaco's export map covers .js only; its CSS files are imported through this alias.
+      '@hrflow/monaco-css': resolve(import.meta.dirname, 'node_modules/monaco-editor/esm/vs'),
+    },
+  },
+  define: mode === 'e2e' ? E2E_ENV : {},
+  build: {
+    sourcemap: false,
+    // E2E build only: a page showing the shared UI components (e2e/ui-frame.spec.ts). The
+    // production build has no such page, so no extra route ever reaches users.
+    ...(mode === 'e2e'
+      ? {
+          rolldownOptions: {
+            input: {
+              index: resolve(import.meta.dirname, 'index.html'),
+              showcase: resolve(import.meta.dirname, 'e2e-showcase.html'),
+            },
+          },
+        }
+      : {}),
+  },
+  worker: {
+    format: 'es',
+    plugins: () => [duckDbManifestModule()],
+  },
+  preview: {
+    headers: pagesHeaders(),
+  },
+  test: {
+    // Engine is pure TS and must run in Node (no DOM).
+    environment: 'node',
+    // Component tests (.tsx) render to static markup in Node: no DOM library needed.
+    include: ['src/**/*.test.ts', 'src/**/__tests__/**/*.test.tsx'],
+    testTimeout: 30_000,
+  },
+}));

@@ -1,0 +1,114 @@
+import { Link } from '@tanstack/react-router';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { cx, floatClass } from '../components/ui';
+import { signOutAndReload, useAuthService } from '../features/auth/auth-context';
+import type { SessionUser } from '../features/auth/guard';
+
+function initials(user: SessionUser): string {
+  const source = user.fullName.trim() || user.username;
+  const words = source.split(/[\s._-]+/).filter(Boolean);
+  const letters = words.length > 1 ? [words[0]![0], words.at(-1)![0]] : [source[0], source[1]];
+  return letters.filter(Boolean).join('').toUpperCase();
+}
+
+const itemClass =
+  'flex min-h-target w-full items-center rounded-input px-4 text-left text-body text-ink-soft no-underline hover:bg-teal-tint hover:text-teal-strong';
+
+/** Disclosure menu (button + list of links), closes on Escape / outside click / navigation. */
+export function UserMenu({ user }: { user: SessionUser }) {
+  const { t } = useTranslation();
+  const auth = useAuthService();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  const admin = user.role === 'admin';
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={t('userMenu.open', { name: user.username })}
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-h-target items-center gap-3 rounded-card px-2 text-body hover:bg-neutral"
+      >
+        {/* Initials are drawn by CSS (not text) so the button's visible text is only the username,
+            which its accessible name contains (WCAG 2.5.3). */}
+        <span
+          aria-hidden
+          data-initials={initials(user)}
+          className={cx(
+            'flex size-9 items-center justify-center rounded-full text-caption font-semibold',
+            'before:content-[attr(data-initials)]',
+            admin ? 'bg-blue-tint text-blue-text' : 'bg-teal-tint text-teal-strong',
+          )}
+        />
+        <span className="font-semibold text-ink-soft max-sm:sr-only">{user.username}</span>
+      </button>
+      {open && (
+        <div
+          id={panelId}
+          className={cx(floatClass, 'absolute right-0 z-40 mt-2 flex w-60 flex-col gap-1 p-2')}
+        >
+          <p className="m-0 px-4 py-2 text-caption text-muted">
+            {user.fullName || user.username}
+            <span className="block font-semibold text-ink-soft">
+              {t(`userMenu.role.${user.role}`)}
+            </span>
+          </p>
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            <li>
+              <Link to="/" className={itemClass} onClick={() => setOpen(false)}>
+                {t('nav.runFlows')}
+              </Link>
+            </li>
+            {admin && (
+              <li>
+                <Link to="/admin/users" className={itemClass} onClick={() => setOpen(false)}>
+                  {t('userMenu.admin')}
+                </Link>
+              </li>
+            )}
+            <li>
+              <Link to="/change-password" className={itemClass} onClick={() => setOpen(false)}>
+                {t('nav.changePassword')}
+              </Link>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={itemClass}
+                onClick={() => void signOutAndReload(auth)}
+              >
+                {t('userMenu.signOut')}
+              </button>
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,848 @@
+/**
+ * Design language v2 (spec §25, §28 AC-UI-03..13, 20, 30, 31): screenshots of every screen state
+ * for Harold's manual review (test-results/ui-v2/, with index.html; no pixel comparison, MEMORY
+ * 2026-11-03 09:07), computed-style checks and an axe WCAG 2.1 A/AA scan on each state.
+ * Supabase is mocked; data is the fake fixture set only.
+ */
+import { ADMIN, expect, SUPABASE_ORIGIN, test, type Page } from './fixtures';
+import {
+  employees,
+  fixtures,
+  openCreateAccount,
+  payroll,
+  payrollInput,
+  periodButton,
+  pickMonth,
+  reportCard,
+  rowMenuItem,
+  runButton,
+  runToResult,
+  timesheet,
+  timesheetInput,
+  uploadFixtures,
+  workbook,
+} from './helpers';
+import { baseFlowDefinition, type SupabaseMock } from './supabase-mock';
+import { seedDemoRefTables } from './supabase-mock-ref';
+import {
+  adminTableChecks,
+  axe,
+  axeLog,
+  buttonChecks,
+  C,
+  cardChecks,
+  commonChecks,
+  denseTableChecks,
+  designerToolbarChecks,
+  DESKTOP,
+  floatChecks,
+  freezeClock,
+  FROZEN_NOW,
+  inputChecks,
+  labelChecks,
+  MOBILE,
+  navChecks,
+  paletteChecks,
+  pillChecks,
+  primaryChecks,
+  rowActionsChecks,
+  tableRowChecks,
+  rowMenuChecks,
+  shot,
+  style,
+  titleChecks,
+  topBarChecks,
+} from './ui-v2-checks';
+
+const FLOW_ID = '00000000-0000-4000-8000-0000000000f1';
+const DRAFT_ID = '00000000-0000-4000-8000-000000000777';
+const VERSIONS = '/admin/flows/payroll-timesheet/versions';
+const DESIGNER = '/admin/flows/payroll-timesheet/designer';
+
+// Dates on screen must not depend on the run day (pixel comparison, spec §30.3).
+test.beforeEach(({ page }) => freezeClock(page));
+
+test.afterAll(() => {
+  // Summary of every axe scan in this worker (minor/moderate findings are reported, not blocking).
+  const other = axeLog.flatMap((s) =>
+    s.violations.map((v) => `${s.state}: ${v.id} (${v.impact}) x${v.n}`),
+  );
+  console.log(`[ui-v2] axe scans: ${axeLog.length}; non-blocking findings: ${other.length}`);
+  for (const line of other) console.log(`[ui-v2]   ${line}`);
+});
+
+/** v1 published + v2 draft with the "Công" tolerance changed and a formula node. */
+function withDraft(supabase: SupabaseMock) {
+  const [v1] = supabase.setVersions([{ no: 1, from: '2026-01-01', to: null }]);
+  v1!.change_note = 'Bản đầu tiên';
+  v1!.published_by = ADMIN.id;
+  const def = baseFlowDefinition() as Record<string, unknown> & {
+    nodes: { id: string; type: string; config: Record<string, unknown> }[];
+    edges: unknown[];
+  };
+  const cmp = def.nodes.find((n) => n.type === 'control.compare');
+  const metrics = cmp?.config.metrics as { tolerance?: string }[] | undefined;
+  if (metrics?.[0]) metrics[0].tolerance = '2';
+  def.nodes.push({
+    id: 'formula_1',
+    type: 'transform.formula',
+    label: 'Công thức',
+    config: {
+      columns: [
+        {
+          key: 'ot_moi_phep',
+          title: 'OT mỗi phép',
+          formula: '=[ot]/[phep]',
+          type: 'auto',
+          onError: 'blank',
+        },
+      ],
+    },
+  } as never);
+  def.edges.push({ from: 'in_luong', fromPort: 'table', to: 'formula_1', toPort: 'in' });
+  supabase.versions.push({
+    id: DRAFT_ID,
+    flow_id: FLOW_ID,
+    version_no: 2,
+    status: 'draft',
+    effective_from: '',
+    effective_to: null,
+    definition: def,
+    published_at: null,
+    updated_at: '2026-10-27T01:00:00.000001+00:00',
+  });
+}
+
+for (const viewport of [DESKTOP, MOBILE]) {
+  const size = `${viewport.width}x${viewport.height}`;
+  const mobile = viewport.width < 768;
+
+  test.describe(`auth screens ${size}`, () => {
+    test.use({ signedInAs: null, viewport });
+
+    test('login (empty + error)', async ({ page }) => {
+      await page.goto('/login');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Đăng nhập');
+      await commonChecks(page);
+      await titleChecks(page);
+      const card = page.locator('form');
+      const s = await style(card);
+      expect(s.radius).toBe('12px');
+      expect(s.borderTop).toBe(`1px solid ${C.line}`);
+      expect(s.shadow).toBe('none');
+      expect(s.paddingTop).toBe(mobile ? '24px' : '32px');
+      expect(s.width).toBeLessThanOrEqual(440);
+      expect((await style(page.locator('body > div > div').first())).bg).toBe(C.page);
+      await inputChecks(page.locator('input'));
+      await labelChecks(page.locator('form label'));
+      await buttonChecks(page.getByRole('button', { name: 'Đăng nhập' }));
+      await primaryChecks(page.getByRole('button', { name: 'Đăng nhập' }));
+      await axe(page, `login-empty ${size}`);
+      await shot(page, '01-login', 'empty');
+
+      await page.getByLabel('Tên đăng nhập').fill('hr.nv01');
+      await page.getByLabel('Mật khẩu').fill('sai-mat-khau');
+      await page.getByRole('button', { name: 'Đăng nhập' }).click();
+      await expect(page.getByRole('alert')).toBeVisible();
+      await commonChecks(page);
+      await axe(page, `login-error ${size}`);
+      await shot(page, '01-login', 'error');
+    });
+  });
+
+  test.describe(`user screens ${size}`, () => {
+    test.use({ viewport });
+
+    test('change password', async ({ page }) => {
+      await page.goto('/change-password');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Đặt mật khẩu mới');
+      await commonChecks(page);
+      // Form workspace (§25.5): a link back to the flow list takes the eyebrow's place (AC-UI-71).
+      await titleChecks(page, { eyebrow: false });
+      await expect(
+        page.locator('[data-page-header]').getByRole('link', { name: 'Danh sách luồng xử lý' }),
+      ).toBeVisible();
+      await inputChecks(page.locator('form input'));
+      await buttonChecks(page.locator('form button, form a'));
+      // The save button is the dark variant (§25.3), the second one an outline button.
+      expect((await style(page.getByRole('button', { name: 'Lưu mật khẩu' }))).bg).toBe(C.ink);
+      await axe(page, `change-password ${size}`);
+      await shot(page, '02-change-password', 'default');
+    });
+
+    test('flow list', async ({ page }) => {
+      await page.goto('/');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'Chọn luồng cần xử lý hôm nay',
+      );
+      await expect(page.getByText('2 đầu vào · Phiên bản v3')).toBeVisible();
+      await commonChecks(page);
+      await titleChecks(page);
+      await topBarChecks(page);
+      await cardChecks(page.locator('main [data-card]'));
+      await inputChecks(page.locator('#flow-search'));
+      await pillChecks(page.getByRole('group', { name: 'Lọc theo nhóm' }).getByRole('button'));
+      // AC-UI-71: no left menu on User screens; content centred, at most 1280px.
+      await expect(page.getByRole('navigation', { name: 'Menu', exact: true })).toHaveCount(0);
+      expect((await style(page.locator('main'))).maxWidth).toBe('1280px');
+      await axe(page, `flow-list ${size}`);
+      await shot(page, '03-flow-list', 'default');
+    });
+
+    test('run: empty, month picker open, validation errors + warnings, running', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.goto('/run/payroll-timesheet');
+      await expect(periodButton(page)).toBeVisible();
+      await commonChecks(page);
+      // Wizard (§25.5): back link instead of the eyebrow, one-line Stepper, sticky action bar.
+      await titleChecks(page, { eyebrow: false });
+      await expect(page.locator('[data-stepper] li')).toHaveCount(4);
+      await expect(page.locator('[data-stepper] [aria-current="step"]')).toHaveCount(1);
+      const bar = page.getByRole('region', { name: 'Thao tác bắt đầu luồng xử lý' });
+      await expect(bar.getByRole('button', { name: /^Bắt đầu/ })).toBeInViewport();
+      await cardChecks(page.locator('main [data-card]'));
+      await inputChecks(periodButton(page));
+      await labelChecks(page.locator('main label[for^="param-"]'));
+      const drop = await style(page.getByText(/Kéo thả file vào đây/).first());
+      expect(drop.radius).toBe('12px');
+      expect(drop.borderTop).toBe('2px dashed rgb(153, 224, 210)');
+      await axe(page, `run-empty ${size}`);
+      await shot(page, '04-run', 'empty');
+
+      // Month picker open (custom, popover level 2).
+      await periodButton(page).click();
+      const popover = page.locator('[role="dialog"][aria-modal="false"]');
+      await expect(popover).toBeVisible();
+      await floatChecks(popover);
+      await axe(page, `month-picker ${size}`);
+      await shot(page, '05-month-picker', 'open');
+      await page.keyboard.press('Escape');
+      await pickMonth(page, '2026-09');
+
+      // Validation: one ambiguous number (warning) + a duplicate key across two files (error).
+      const rows = employees(3);
+      rows[1]![4] = '1,500';
+      await payrollInput(page).setInputFiles([
+        payroll('luong_A.xlsx', rows),
+        payroll('luong_B.xlsx', employees(2, 3, 'CN02')),
+      ]);
+      await timesheetInput(page).setInputFiles(fixtures('cham_cong_'));
+      await expect(reportCard(page).locator('tbody tr')).toHaveCount(2, { timeout: 30_000 });
+      await expect(runButton(page)).toBeDisabled();
+      await commonChecks(page);
+      await pillChecks(page.locator('main [data-chip]'));
+      await axe(page, `run-validation ${size}`);
+      await shot(page, '04-run', 'validation');
+
+      // Running: a run large enough to be caught mid-way (24k rows per side).
+      await page.reload();
+      await pickMonth(page, '2026-09');
+      await payrollInput(page).setInputFiles([payroll('bang_luong_lon.xlsx', employees(24_000))]);
+      await timesheetInput(page).setInputFiles([
+        timesheet('cham_cong_lon.xlsx', employees(24_000, 1, 'CN01', 24)),
+      ]);
+      await expect(runButton(page)).toHaveText('Bắt đầu', { timeout: 30_000 });
+      await runButton(page).click();
+      const cancel = page.getByRole('button', { name: 'Hủy', exact: true });
+      await expect(cancel).toBeVisible({ timeout: 5_000 });
+      // Checks first, while the run is surely in progress; then the picture and the axe scan.
+      await commonChecks(page);
+      await shot(page, '04-run', 'running', { compare: false });
+      await axe(page, `run-running ${size}`);
+      await expect(cancel).toBeVisible();
+    });
+
+    test('result: summary tab and mismatch tab', async ({ page }) => {
+      test.setTimeout(120_000);
+      await uploadFixtures(page);
+      await runToResult(page);
+      const h1 = page.getByRole('heading', { level: 1 });
+      await expect(h1).toHaveText('Kỳ 09/2026 có 15 nhân viên cần xử lý');
+      // AC-UI-09: exactly one dark card, KPI cards with a 4px top bar and `kpi` numbers (40/32px).
+      await commonChecks(page, { darkCards: 1 });
+      await titleChecks(page);
+      const dark = await style(page.getByTestId('conclusion'));
+      expect(dark.bg).toBe(C.ink);
+      expect(dark.color).toBe(C.white);
+      expect(dark.radius).toBe('12px');
+      await expect(page.getByTestId('conclusion')).toContainText('Cần xử lý 15 nhân viên');
+      const kpis = page.getByTestId('kpi');
+      await expect(kpis).toHaveCount(4);
+      await cardChecks(kpis);
+      const tops = ['rgb(20, 184, 166)', 'rgb(249, 115, 98)', 'rgb(251, 191, 36)'];
+      for (let i = 0; i < 4; i++) {
+        const s = await style(kpis.nth(i));
+        expect(s.borderTop).toBe(`4px solid ${tops[Math.min(i, 2)]}`);
+        const kpi = await style(kpis.nth(i).locator('dd'));
+        expect(kpi.fontSize).toBe(mobile ? '32px' : '40px');
+        expect(kpi.fontWeight).toBe('600');
+      }
+      await pillChecks(page.getByRole('tab'));
+      await denseTableChecks(page.getByRole('region', { name: 'Lệch' }).locator('table'));
+      await axe(page, `result-mismatch ${size}`);
+      await shot(page, '06-result', 'mismatch-tab');
+
+      await page.getByRole('tab', { name: 'Tổng hợp' }).click();
+      await expect(page.getByRole('tab', { selected: true })).toHaveText('Tổng hợp');
+      await commonChecks(page, { darkCards: 1 });
+      await axe(page, `result-summary ${size}`);
+      await shot(page, '06-result', 'summary-tab');
+    });
+  });
+}
+
+test.describe('admin screens 1280x800', () => {
+  test.use({ signedInAs: ADMIN, viewport: DESKTOP });
+
+  test('users: table, Select open, temporary password dialog', async ({ page }) => {
+    await page.goto('/admin/users');
+    await expect(page.getByRole('table', { name: 'Danh sách tài khoản' })).toBeVisible();
+    await commonChecks(page);
+    await titleChecks(page);
+    await topBarChecks(page);
+    await navChecks(page.getByRole('navigation', { name: 'Menu dành cho Admin' }));
+    await cardChecks(page.locator('main [data-card]'));
+    await adminTableChecks(page.getByRole('table', { name: 'Danh sách tài khoản' }));
+    await inputChecks(page.locator('main input[type="text"], main [role="combobox"]'));
+    await labelChecks(page.locator('main label[for]'));
+    await pillChecks(page.getByRole('tab'));
+    // AC-UI-54: shared action column, one line, aligned; menu by keyboard; left menu "Sắp có".
+    const users = page.getByRole('table', { name: 'Danh sách tài khoản' });
+    await rowActionsChecks(users);
+    await tableRowChecks(users, { noScroll: true });
+    // AC-UI-55: full width, no horizontal scroll in the table region at 1280x800.
+    const noScroll = (t: typeof users) =>
+      t.evaluate((el) => {
+        const r = el.closest('[role="region"]')!;
+        return r.scrollWidth - r.clientWidth;
+      });
+    expect(await noScroll(users)).toBeLessThanOrEqual(0);
+    await soonChecks(page);
+    await axe(page, 'admin-users 1280x800');
+    await shot(page, '07-admin-users', 'table');
+    await rowMenuChecks(page, users.getByRole('row', { name: /^hr\./ }).first());
+    await commonChecks(page);
+    await axe(page, 'admin-users-row-menu 1280x800');
+    await shot(page, '07-admin-users', 'row-menu-open');
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('tab', { name: /^Nhóm/ }).click();
+    const groups = page.getByRole('table', { name: 'Danh sách nhóm' });
+    await expect(groups).toBeVisible();
+    await rowActionsChecks(groups);
+    await tableRowChecks(groups, { noScroll: true });
+    expect(await noScroll(groups)).toBeLessThanOrEqual(0);
+    await commonChecks(page);
+    await axe(page, 'admin-groups 1280x800');
+    await shot(page, '07-admin-users', 'groups-table');
+    await page.getByRole('tab', { name: /^Tài khoản/ }).click();
+
+    // Custom Select open: popover level 2, eyebrow group headers (uppercase allowed there).
+    const trigger = page.getByRole('combobox', { name: 'Gán cho' });
+    await trigger.click();
+    const list = page.getByRole('listbox', { name: 'Gán cho' });
+    await expect(list).toBeVisible();
+    await floatChecks(list.locator('..'));
+    const header = list.getByText('Tài khoản', { exact: true });
+    expect((await style(header)).fontSize).toBe('14px');
+    await axe(page, 'select-open 1280x800');
+    await shot(page, '08-select', 'open');
+    await page.keyboard.press('Escape');
+
+    // AC-UI-55: create form in a dialog (level 2), focus on the first field, Esc returns focus.
+    const createDialog = await openCreateAccount(page);
+    await floatChecks(createDialog);
+    // Username has focus (teal border + ring); the other text field has the resting style.
+    expect((await style(createDialog.locator('#new-username'))).borderLeft).toBe(
+      `1px solid ${C.teal}`,
+    );
+    await inputChecks(createDialog.locator('#new-fullname'));
+    await labelChecks(createDialog.locator('label[for]'));
+    await buttonChecks(createDialog.getByRole('button', { name: 'Tạo và hiện mật khẩu tạm' }));
+    await commonChecks(page);
+    await axe(page, 'admin-users-create-dialog 1280x800');
+    await shot(page, '07-admin-users', 'create-dialog');
+    await page.keyboard.press('Escape');
+    await expect(createDialog).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '+ Tạo tài khoản' })).toBeFocused();
+    await openCreateAccount(page);
+    await page.getByLabel(/^Username/).fill('hr.cn05');
+    await page.getByRole('button', { name: 'Tạo và hiện mật khẩu tạm' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Mật khẩu tạm của hr.cn05' });
+    await expect(dialog).toBeVisible();
+    await floatChecks(dialog);
+    expect((await style(dialog.getByRole('heading', { level: 2 }))).fontSize).toBe('20px');
+    await commonChecks(page);
+    await axe(page, 'admin-users-dialog 1280x800');
+    await shot(page, '07-admin-users', 'temp-password-dialog');
+  });
+
+  test('users: 10 accounts, at least 9 rows in view without scrolling the page (AC-UI-62)', async ({
+    page,
+    supabase,
+  }) => {
+    for (let i = 1; i <= 8; i++) {
+      supabase.users.push({
+        id: `00000000-0000-4000-8000-${String(900 + i).padStart(12, '0')}`,
+        username: `hr.gia${String(i).padStart(2, '0')}`,
+        full_name: `Nhân viên Giả ${i}`,
+        role: 'user',
+        is_active: true,
+        must_change_password: false,
+        password: 'khong-dung-123',
+      });
+    }
+    await page.goto('/admin/users');
+    const table = page.getByRole('table', { name: 'Danh sách tài khoản' });
+    await expect(table.locator('tbody tr')).toHaveCount(10);
+    const header = page.locator('[data-page-header]');
+    expect((await header.boundingBox())!.height, 'workspace header').toBeLessThanOrEqual(96);
+    const inView = await table.evaluate((t) => {
+      const bottom = window.innerHeight;
+      return Array.from(t.querySelectorAll('tbody tr')).filter(
+        (r) => r.getBoundingClientRect().bottom <= bottom,
+      ).length;
+    });
+    expect(inView, 'rows fully in view at 1280x800').toBeGreaterThanOrEqual(9);
+    // Nothing scrolled: neither the window nor the content column (spec §32 AC-SB-07).
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(await page.locator('[data-scroll-frame]').evaluate((el) => el.scrollTop)).toBe(0);
+    await tableRowChecks(table, { noScroll: true });
+    await shot(page, '07-admin-users', 'ten-accounts');
+  });
+
+  test('flows list', async ({ page, supabase }) => {
+    withDraft(supabase);
+    await page.goto('/admin/flows');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Flow và phiên bản');
+    await commonChecks(page);
+    await titleChecks(page);
+    await cardChecks(page.locator('main [data-card]'));
+    await adminTableChecks(page.locator('main table').first());
+    await rowActionsChecks(page.locator('main table').first());
+    await tableRowChecks(page.locator('main table').first());
+    await axe(page, 'admin-flows 1280x800');
+    await shot(page, '09-admin-flows', 'list');
+    await rowMenuChecks(page, page.locator('main tbody tr').first());
+    await axe(page, 'admin-flows-row-menu 1280x800');
+    await shot(page, '09-admin-flows', 'row-menu-open');
+    await page.keyboard.press('Escape');
+  });
+
+  test('ui texts: list and edit dialog (spec §33)', async ({ page, supabase }) => {
+    supabase.uiTexts = [
+      {
+        key: 'common:auth.login.note',
+        value: 'Tài khoản do phòng Nhân sự cấp. Quên mật khẩu, liên hệ bộ phận HR Analytics.',
+        updated_by: ADMIN.id,
+        updated_at: '2026-11-09T02:30:00+00:00',
+      },
+    ];
+    await page.goto('/admin/ui-text');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sửa câu chữ trên giao diện');
+    const card = page.getByRole('region', { name: 'Danh sách văn bản' });
+    await card.getByLabel('Tìm').fill('auth.login');
+    await expect(card.locator('tbody tr')).toHaveCount(7);
+    await commonChecks(page);
+    await titleChecks(page);
+    await cardChecks(page.locator('main [data-card]'));
+    await adminTableChecks(page.locator('main table').first());
+    await tableRowChecks(page.locator('main table').first());
+    await axe(page, 'admin-ui-text 1280x800');
+    await shot(page, '15-admin-ui-text', 'list');
+    await card.getByLabel('Tìm').fill('result.titleMismatched');
+    await card.getByRole('button', { name: 'Sửa result.titleMismatched', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Sửa văn bản' });
+    await dialog.getByLabel('Chữ mới').fill('Kỳ {{period}} có nhân viên lệch');
+    await expect(dialog.getByText(/^Thiếu biến/)).toBeVisible();
+    await floatChecks(dialog);
+    await axe(page, 'admin-ui-text-edit 1280x800');
+    await shot(page, '15-admin-ui-text', 'edit-dialog');
+    await page.keyboard.press('Escape');
+  });
+
+  test('reference tables: list, columns, versions, data grid, import (spec §34)', async ({
+    page,
+    supabase,
+  }) => {
+    seedDemoRefTables(supabase.ref);
+    await page.goto('/admin/ref-tables');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Bảng tham chiếu dùng chung');
+    const list = page.getByRole('region', { name: 'Bảng tham chiếu', exact: true });
+    await expect(list.locator('tbody tr')).toHaveCount(2);
+    await commonChecks(page);
+    await titleChecks(page);
+    await cardChecks(page.locator('main [data-card]'));
+    await adminTableChecks(page.locator('main table').first());
+    await tableRowChecks(page.locator('main table').first());
+    await axe(page, 'admin-ref-tables 1280x800');
+    await shot(page, '16-admin-ref-tables', 'list');
+
+    await page.getByRole('link', { name: 'Sửa cột DM_CHI_NHANH' }).click();
+    await page.getByRole('button', { name: '+ Thêm cột' }).click();
+    const col = page.getByRole('dialog', { name: 'Thêm cột' });
+    await col.getByRole('textbox', { name: /^Tên hiển thị/ }).fill('Họ tên giám đốc CN');
+    await col.getByRole('button', { name: 'Lưu cột' }).click();
+    await expect(page.getByText('Có thể là dữ liệu cá nhân:')).toBeVisible();
+    await axe(page, 'admin-ref-columns 1280x800');
+    await shot(page, '16-admin-ref-tables', 'columns');
+    await page.getByRole('button', { name: 'Xóa cột ho_ten_giam_doc_cn' }).click();
+
+    await page.getByRole('link', { name: 'Phiên bản', exact: true }).click();
+    await expect(page.locator('[data-diff-summary]')).toBeVisible();
+    await adminTableChecks(page.locator('main table').first());
+    await axe(page, 'admin-ref-versions 1280x800');
+    await shot(page, '16-admin-ref-tables', 'versions-and-diff');
+
+    await page.getByRole('button', { name: 'Import Excel vào draft' }).click();
+    const imp = page.getByRole('dialog', { name: 'Import Excel vào draft v3' });
+    await imp.getByLabel('Chọn file Excel để import').setInputFiles(
+      workbook('danh_muc_chi_nhanh.xlsx', {
+        S: [
+          ['Mã CN', 'Tên chi nhánh', 'Vùng lương tối thiểu', 'Ghi chú'],
+          ...Array.from({ length: 12 }, (_, i) => [`CN${i + 1}`, `Chi nhánh ${i + 1}`, 1, '']),
+        ],
+      }),
+    );
+    await expect(imp.getByText('1 cảnh báo')).toBeVisible();
+    await floatChecks(imp);
+    await expect(imp.getByRole('button', { name: 'Chọn file khác' })).toBeFocused();
+    await page.mouse.move(0, 0);
+    await axe(page, 'admin-ref-import 1280x800');
+    await shot(page, '16-admin-ref-tables', 'import-dialog');
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('link', { name: 'Sửa dữ liệu v3' }).click();
+    const vung = page.getByRole('textbox', { name: 'Vùng lương tối thiểu, dòng 2', exact: true });
+    await vung.fill('hai');
+    await page.getByRole('button', { name: '+ Thêm dòng' }).click();
+    await page.getByRole('button', { name: 'Xóa dòng 1', exact: true }).click();
+    await page.mouse.move(0, 0);
+    await axe(page, 'admin-ref-data 1280x800');
+    await shot(page, '16-admin-ref-tables', 'data-grid');
+  });
+
+  test('versions: list + diff', async ({ page, supabase }) => {
+    withDraft(supabase);
+    await page.goto(VERSIONS);
+    await expect(page.getByRole('table', { name: 'Danh sách phiên bản' })).toBeVisible();
+    await commonChecks(page);
+    // List template with a back link to the flow list in the eyebrow's place.
+    await titleChecks(page, { eyebrow: false });
+    await cardChecks(page.locator('main [data-card]'));
+    const table = page.getByRole('table', { name: 'Danh sách phiên bản' });
+    await adminTableChecks(table);
+    await rowActionsChecks(table);
+    await tableRowChecks(table);
+    // Draft row: visible "Mở Designer" only (same pattern as the Flows table), "Publish" first in
+    // the menu; published row: "Xem trong Designer".
+    const draft = table.getByRole('row', { name: /^v2/ });
+    await expect(draft.getByRole('link', { name: 'Mở Designer v2' })).toBeVisible();
+    await expect(draft.getByRole('button', { name: 'Publish v2' })).toHaveCount(0);
+    await expect(await rowMenuItem(draft, 'Publish v2')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(
+      table.getByRole('row', { name: /^v1/ }).getByRole('link', { name: 'Xem trong Designer v1' }),
+    ).toBeVisible();
+    const diff = page.getByRole('region', { name: 'So sánh phiên bản' });
+    await expect(diff.getByRole('heading', { name: /^Node/ })).toBeVisible();
+    // JSON diff is a code area: 14px.
+    expect((await style(diff.locator('td.font-mono').first())).fontSize).toBe('14px');
+    await axe(page, 'versions 1280x800');
+    await shot(page, '10-versions', 'list-and-diff');
+    const menu = await rowMenuChecks(page, table.getByRole('row', { name: /^v1/ }));
+    await expect(menu.getByRole('menuitem').last()).toHaveAccessibleName('Retire v1');
+    await axe(page, 'versions-row-menu 1280x800');
+    await shot(page, '10-versions', 'row-menu-open');
+    await page.keyboard.press('Escape');
+    await diff.scrollIntoViewIfNeeded();
+    await shot(page, '10-versions', 'diff');
+  });
+
+  test('designer: canvas, formula node panel, preview', async ({ page, supabase }) => {
+    test.setTimeout(120_000);
+    withDraft(supabase);
+    await page.goto(DESIGNER);
+    const node = page.getByTestId('rf__node-formula_1');
+    await expect(node).toBeVisible({ timeout: 30_000 });
+    await settleCanvas(page);
+    // AC-UI-13: palette, canvas, config panel and status bar all visible at 1280x800.
+    await expect(page.getByRole('heading', { name: 'Thêm node' })).toBeVisible();
+    await expect(page.locator('.react-flow')).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Cấu hình' })).toBeVisible();
+    const canvas = await page.locator('.react-flow').boundingBox();
+    test.info().annotations.push({
+      type: 'canvas-area',
+      description: `${Math.round(canvas!.width)}x${Math.round(canvas!.height)}`,
+    });
+    // Node cards: 12px, 1px border, no shadow; node text stays 14px.
+    const card = node.locator('> div').first();
+    const s = await style(card);
+    expect(s.radius).toBe('12px');
+    expect(s.shadow).toBe('none');
+    expect((await style(node.locator('p').first())).fontSize).toBe('14px');
+    await commonChecks(page);
+    await designerToolbarChecks(page);
+    await paletteChecks(page);
+    await axe(page, 'designer-canvas 1280x800', REACT_FLOW_EXCLUDE);
+    await shot(page, '11-designer', 'canvas');
+
+    await expect(async () => {
+      await node.click();
+      await expect(page.getByTestId('formula-editor-0').locator('.monaco-editor')).toBeVisible({
+        timeout: 3000,
+      });
+    }).toPass({ timeout: 60_000 });
+    // Side form keeps 14px labels (high-density exception).
+    const side = page.getByRole('complementary', { name: 'Cấu hình' });
+    expect((await style(side.locator('label').first())).fontSize).toBe('14px');
+    await commonChecks(page);
+    await axe(page, 'designer-formula 1280x800', REACT_FLOW_EXCLUDE);
+    await shot(page, '11-designer', 'formula-panel');
+
+    await page.getByRole('button', { name: 'Dữ liệu mẫu và xem trước' }).click();
+    const panel = page.getByRole('region', { name: 'Dữ liệu mẫu và xem trước' });
+    await panel
+      .getByLabel('File mẫu cho Bảng lương (nhiều chi nhánh)')
+      .setInputFiles(fixtures('bang_luong_'));
+    await expect(panel.getByRole('status').filter({ hasText: '75 dòng' })).toHaveCount(1);
+    await pickMonth(page, '2026-09', panel.getByRole('button', { name: /Kỳ lương/ }));
+    await panel.getByRole('button', { name: 'Xem trước Công thức' }).click();
+    await expect(panel.getByRole('columnheader', { name: 'OT mỗi phép' })).toBeVisible({
+      timeout: 60_000,
+    });
+    expect((await style(panel.locator('tbody td').first())).fontSize).toBe('14px');
+    await commonChecks(page);
+    await axe(page, 'designer-preview 1280x800', REACT_FLOW_EXCLUDE);
+    await shot(page, '11-designer', 'preview');
+  });
+});
+
+test.describe('round B frame states 1280x800 (AC-UI-74)', () => {
+  test.use({ signedInAs: ADMIN, viewport: DESKTOP });
+
+  test('ConfirmDialog (danger) and the success toast', async ({ page }) => {
+    await page.goto('/admin/users');
+    const users = page.getByRole('table', { name: 'Danh sách tài khoản' });
+    await expect(users).toBeVisible();
+    await (
+      await rowMenuItem(users.getByRole('row', { name: /^hr\./ }).first(), /^Khóa tài khoản/)
+    ).click();
+    const dialog = page.getByRole('dialog', { name: /^Khóa tài khoản .+\?$/ });
+    await expect(dialog).toBeVisible();
+    await floatChecks(dialog);
+    // Danger confirmation (§25.5): Cancel is a text button with the focus, the confirm button is
+    // the coral outline one at the outer edge, both 44px.
+    const cancel = dialog.getByRole('button', { name: 'Hủy' });
+    const lock = dialog.getByRole('button', { name: 'Khóa', exact: true });
+    await expect(cancel).toBeFocused();
+    expect((await style(cancel)).bg).toBe('rgba(0, 0, 0, 0)');
+    const ls = await style(lock);
+    expect(ls.color).toBe(C.coralText);
+    expect(ls.borderTop).toBe(`1px solid ${C.coralText}`);
+    expect(Math.round(ls.height)).toBe(44);
+    const footer = await dialog.locator('[data-dialog-footer]').evaluate((f) => {
+      const b = Array.from(f.querySelectorAll('button')).map((x) => x.textContent?.trim());
+      return { last: b.at(-1), justify: getComputedStyle(f).justifyContent };
+    });
+    expect(footer).toEqual({ last: 'Khóa', justify: 'flex-end' });
+    expect((await style(dialog.getByRole('heading', { level: 2 }))).fontSize).toBe('20px');
+    await commonChecks(page);
+    await axe(page, 'confirm-dialog 1280x800');
+    await shot(page, '14-frame', 'confirm-dialog');
+
+    await lock.click();
+    await expect(dialog).toHaveCount(0);
+    const toast = page.getByRole('status').filter({ hasText: 'Đã khóa tài khoản' });
+    await expect(toast).toBeVisible();
+    // Toast (§25.3/§25.5): level 2, 4px teal bar on the left, close button 44px, bottom right.
+    await floatChecks(toast);
+    expect((await style(toast)).borderLeft).toBe(`4px solid ${C.teal}`);
+    const close = toast.getByRole('button', { name: 'Đóng thông báo' });
+    expect(Math.round((await style(close)).height)).toBe(44);
+    // Measured once the slide-in animation has finished. 24px from the window edge: from 768px
+    // the window keeps no room for a scrollbar (the frame below the top bar scrolls, spec §32
+    // AC-SB-07), so the content edge is the window edge.
+    const gutter = await page.evaluate(
+      () => innerWidth - Math.round(document.body.getBoundingClientRect().width),
+    );
+    expect(gutter).toBe(0);
+    await expect
+      .poll(async () => {
+        const b = (await toast.boundingBox())!;
+        return [
+          Math.round(DESKTOP.width - gutter - (b.x + b.width)),
+          Math.round(DESKTOP.height - (b.y + b.height)),
+        ];
+      })
+      .toEqual([24, 24]);
+    await commonChecks(page);
+    await axe(page, 'toast 1280x800');
+    await shot(page, '14-frame', 'toast');
+  });
+
+  test('Designer: "Nối tới…" list open', async ({ page, supabase }) => {
+    withDraft(supabase);
+    await page.goto(DESIGNER);
+    await expect(page.getByTestId('rf__node-formula_1')).toBeVisible({ timeout: 30_000 });
+    await settleCanvas(page);
+    await page.getByTestId('rf__node-in_cc').click();
+    await page.keyboard.press('Control+E');
+    const list = page.locator('[data-connect-menu]');
+    await expect(list).toBeVisible();
+    await floatChecks(list);
+    // Dense search box beside the canvas (14px, 42px; §25.1 high-density exception).
+    const box = await style(list.getByRole('combobox'));
+    expect(box.radius).toBe('6px');
+    expect(box.fontSize).toBe('14px');
+    const button = page.getByRole('button', { name: 'Nối tới…' });
+    expect(Math.round((await style(button)).height)).toBe(36);
+    await commonChecks(page);
+    await axe(page, 'designer-connect 1280x800', REACT_FLOW_EXCLUDE);
+    await shot(page, '11-designer', 'connect-list');
+    await page.keyboard.press('Escape');
+    await expect(button).toBeFocused();
+  });
+});
+
+test.describe('idle sign-out warning', () => {
+  test.use({ viewport: DESKTOP });
+
+  test('dialog', async ({ page }) => {
+    await page.clock.install({ time: FROZEN_NOW });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.clock.fastForward('07:55:00');
+    const warning = page.getByRole('alertdialog', { name: 'Bạn sắp bị đăng xuất' });
+    await expect(warning).toBeVisible();
+    await floatChecks(warning);
+    await buttonChecks(warning.getByRole('button'));
+    await commonChecks(page);
+    await axe(page, 'idle-dialog 1280x800');
+    await shot(page, '12-idle-logout', 'dialog');
+  });
+});
+
+/**
+ * React Flow renders the canvas viewport and the attribution link itself; axe findings inside
+ * them are library markup. Our node cards are checked by the style assertions instead.
+ */
+const REACT_FLOW_EXCLUDE = [
+  { selector: '.react-flow__renderer', reason: 'React Flow canvas markup (library)' },
+];
+
+/** Left menu (AC-UI-54): "Sắp có" is a small chip on the same line as its label. */
+async function soonChecks(page: Page): Promise<void> {
+  const nav = page.getByRole('navigation', { name: 'Menu dành cho Admin' });
+  const items = nav.locator('[aria-disabled="true"]');
+  const n = await items.count();
+  expect(n).toBeGreaterThan(0);
+  for (let i = 0; i < n; i++) {
+    expect((await style(items.nth(i))).height, 'disabled item on one line').toBeLessThanOrEqual(44);
+    expect((await style(items.nth(i).locator('span').last())).radius).toBe('999px');
+  }
+}
+
+async function settleCanvas(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+}
+
+test.describe('admin screens at 1024px: no horizontal page scroll (AC-UI-12)', () => {
+  test.use({ signedInAs: ADMIN, viewport: { width: 1024, height: 768 } });
+
+  test('users, flows, versions', async ({ page, supabase }) => {
+    withDraft(supabase);
+    for (const url of ['/admin/users', '/admin/flows', VERSIONS]) {
+      await page.goto(url);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(page.locator('main table').first()).toBeVisible();
+      await commonChecks(page);
+      await rowActionsChecks(page.locator('main table').first());
+      await tableRowChecks(page.locator('main table').first());
+    }
+    await shot(page, '10-versions', 'list-1024');
+  });
+});
+
+test.describe('zoom 200% (640px wide): run and result stay usable (AC-UI-23)', () => {
+  test.use({ viewport: { width: 640, height: 400 } });
+
+  test('run + result', async ({ page }) => {
+    test.setTimeout(120_000);
+    await uploadFixtures(page);
+    await commonChecks(page);
+    await runToResult(page);
+    await commonChecks(page, { darkCards: 1 });
+    await expect(page.getByRole('button', { name: /Tải Excel/ })).toBeVisible();
+    await shot(page, '06-result', 'zoom-200');
+  });
+});
+
+/**
+ * AC-UI-56: while Supabase answers slowly, the screen shows a skeleton of the coming layout in a
+ * `role="status"` region read as "Đang tải…"; the sweep stops under reduced motion. The data
+ * requests are held until the checks are done, then released.
+ */
+async function holdData(page: Page): Promise<() => void> {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route(`${SUPABASE_ORIGIN}/{rest,functions}/**`, async (route, request) => {
+    // The signed-in profile is part of the app start (its own skeleton): let it through.
+    if (!new URL(request.url()).pathname.startsWith('/rest/v1/profiles')) await gate;
+    await route.fallback();
+  });
+  return release;
+}
+
+async function skeletonChecks(page: Page, state: string, screen: string): Promise<void> {
+  const region = page.locator('[data-loading]').first();
+  await expect(region).toHaveAttribute('role', 'status');
+  await expect(region).toHaveText('Đang tải…', { useInnerText: true });
+  const block = region.locator('[data-skeleton]').first();
+  await expect(block).toBeVisible();
+  const s = await style(block);
+  expect(s.bg).toBe('rgb(241, 245, 249)');
+  expect(['6px', '12px', '999px']).toContain(s.radius);
+  const anim = () =>
+    block.evaluate((el) => {
+      const cs = getComputedStyle(el, '::after');
+      return { name: cs.animationName, duration: cs.animationDuration };
+    });
+  expect(await anim()).toEqual({ name: 'hr-skeleton-sweep', duration: '1.5s' });
+  await commonChecks(page);
+  await axe(page, `${state} skeleton`);
+  // Reduced motion: no sweep. The screenshot is taken in this state (a still frame).
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect((await anim()).name).toBe('none');
+  await shot(page, screen, 'skeleton');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+}
+
+test.describe('loading skeleton (AC-UI-56)', () => {
+  test.use({ viewport: DESKTOP });
+
+  test('flow list', async ({ page }) => {
+    const release = await holdData(page);
+    await page.goto('/');
+    await skeletonChecks(page, 'flow-list 1280x800', '03-flow-list');
+    release();
+    await expect(page.locator('[data-loading]')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /^Bắt đầu luồng xử lý: Đối chiếu/ })).toBeVisible();
+  });
+});
+
+test.describe('loading skeleton, admin (AC-UI-56)', () => {
+  test.use({ viewport: DESKTOP, signedInAs: ADMIN });
+
+  test('users & groups', async ({ page }) => {
+    const release = await holdData(page);
+    await page.goto('/admin/users');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await skeletonChecks(page, 'admin-users 1280x800', '07-admin-users');
+    release();
+    await expect(page.locator('[data-loading]')).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Danh sách tài khoản' })).toBeVisible();
+  });
+});

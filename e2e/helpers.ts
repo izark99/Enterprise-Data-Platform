@@ -1,0 +1,382 @@
+/**
+ * Shared E2E helpers: fixture paths, fake workbook builders (SheetJS / ExcelJS resolved from the
+ * web app's dependencies — the root has no runtime deps), a request recorder for the data-privacy
+ * checks (AC-09) and page shortcuts. Fake data only.
+ */
+import { expect, type Locator, type Page, type Request } from '@playwright/test';
+import { readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import type * as ExcelJSModule from '../apps/web/node_modules/exceljs';
+import type * as XLSXModule from '../apps/web/node_modules/xlsx';
+import { join, resolve } from 'node:path';
+
+const requireWeb = createRequire(resolve(import.meta.dirname, '../apps/web/package.json'));
+export const XLSX = requireWeb('xlsx') as typeof XLSXModule;
+export const ExcelJS = requireWeb('exceljs') as typeof ExcelJSModule;
+
+export const FIXTURES = resolve(import.meta.dirname, '../fixtures/payroll-timesheet');
+export const FLOW_URL = '/run/payroll-timesheet';
+export const RESULT_URL = '/run/payroll-timesheet/result';
+
+export function fixtures(prefix: 'bang_luong_' | 'cham_cong_'): string[] {
+  return readdirSync(FIXTURES)
+    .filter((f) => f.startsWith(prefix) && f.endsWith('.xlsx'))
+    .sort()
+    .map((f) => join(FIXTURES, f));
+}
+
+export type Cell = string | number | boolean | null;
+
+export interface UploadPayload {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+}
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+export function workbook(name: string, sheets: Record<string, Cell[][]>): UploadPayload {
+  const wb = XLSX.utils.book_new();
+  for (const [sheet, aoa] of Object.entries(sheets)) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheet);
+  }
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  return { name, mimeType: XLSX_MIME, buffer };
+}
+
+export const PAYROLL_HEADERS = [
+  'STT',
+  'Mã NV',
+  'Họ và tên',
+  'Chi nhánh',
+  'Công tính lương',
+  'Giờ OT',
+  'Ngày phép',
+  'Nghỉ không lương',
+];
+export const TIMESHEET_HEADERS = [
+  'Mã nhân viên',
+  'Họ tên',
+  'Chi nhánh',
+  'Công thực tế',
+  'OT (giờ)',
+  'Phép (ngày)',
+  'Không lương (ngày)',
+];
+
+/** [ma_nv, ho_ten, chi_nhanh, cong, ot, phep, khong_luong] */
+export type EmpRow = [Cell, Cell, Cell, Cell, Cell, Cell, Cell];
+
+export const nv = (i: number) => `NV${String(i).padStart(5, '0')}`;
+
+export function employees(n: number, start = 1, branch = 'CN01', cong: Cell = 26): EmpRow[] {
+  return Array.from({ length: n }, (_, k): EmpRow => {
+    const i = start + k;
+    return [nv(i), `Nhân viên Giả ${i}`, branch, cong, 4, 1, 0];
+  });
+}
+
+/** Payroll sheet "Luong" shaped like the fixture: title row 1, header row 4, data from row 5. */
+export function payrollAoa(
+  rows: EmpRow[],
+  opts: { headers?: string[]; total?: boolean } = {},
+): Cell[][] {
+  return [
+    ['BẢNG LƯƠNG THÁNG 09/2026'],
+    [],
+    [],
+    opts.headers ?? PAYROLL_HEADERS,
+    ...rows.map((r, i): Cell[] => [i + 1, ...r]),
+    ...(opts.total === false ? [] : [[null, null, 'TỔNG CỘNG']]),
+  ];
+}
+
+export function payroll(
+  name: string,
+  rows: EmpRow[],
+  opts: { headers?: string[]; total?: boolean; sheet?: string } = {},
+): UploadPayload {
+  return workbook(name, { [opts.sheet ?? 'Luong']: payrollAoa(rows, opts) });
+}
+
+export function timesheet(
+  name: string,
+  rows: EmpRow[],
+  opts: { headers?: string[]; sheet?: string } = {},
+): UploadPayload {
+  return workbook(name, {
+    [opts.sheet ?? 'ChamCong']: [opts.headers ?? TIMESHEET_HEADERS, ...rows],
+  });
+}
+
+/** All distinct text cell values (names, IDs, branch codes…) of the given workbooks. */
+export function textCellValues(paths: string[], minLength = 5): string[] {
+  const values = new Set<string>();
+  for (const p of paths) {
+    const wb = XLSX.read(readFileSync(p));
+    for (const name of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[name]!, { header: 1 });
+      for (const row of rows) {
+        for (const v of row) {
+          if (typeof v === 'string' && v.trim().length >= minLength) values.add(v.trim());
+        }
+      }
+    }
+  }
+  return [...values];
+}
+
+export interface RecordedRequest {
+  url: string;
+  method: string;
+  resourceType: string;
+  body: string;
+  fromWorker: boolean;
+}
+
+/** Records every request of the page and its workers (context-level, incl. service workers). */
+export function recordRequests(page: Page): RecordedRequest[] {
+  const all: RecordedRequest[] = [];
+  const push = (req: Request) => {
+    let body: string;
+    try {
+      body = req.postDataBuffer()?.toString('latin1') ?? '';
+    } catch {
+      body = '<unreadable>';
+    }
+    all.push({
+      url: req.url(),
+      method: req.method(),
+      resourceType: req.resourceType(),
+      body,
+      fromWorker: !hasFrame(req),
+    });
+  };
+  page.context().on('request', push);
+  return all;
+}
+
+function hasFrame(req: Request): boolean {
+  try {
+    req.frame();
+    return true;
+  } catch {
+    return false; // requests issued by a worker have no frame
+  }
+}
+
+export function runButton(page: Page): Locator {
+  return page.getByRole('button', { name: /^(Bắt đầu|Đang)/ }).last();
+}
+
+export function payrollInput(page: Page): Locator {
+  return page.getByLabel(/^Chọn file cho Bảng lương/);
+}
+
+export function timesheetInput(page: Page): Locator {
+  return page.getByLabel(/^Chọn file cho Chấm công/);
+}
+
+export function payrollList(page: Page): Locator {
+  return page.getByRole('list', { name: /File đã chọn cho Bảng lương/ });
+}
+
+export function timesheetList(page: Page): Locator {
+  return page.getByRole('list', { name: /File đã chọn cho Chấm công/ });
+}
+
+export function reportCard(page: Page): Locator {
+  return page.getByRole('region', { name: 'Báo cáo kiểm tra file' });
+}
+
+/** Trigger button of the custom month picker for the period param. */
+export function periodButton(page: Page): Locator {
+  return page.getByRole('button', { name: /Kỳ lương/ });
+}
+
+/** Pick `YYYY-MM` with the custom month picker (mouse): open, move to the year, click the month. */
+export async function pickMonth(
+  page: Page,
+  value: string,
+  trigger = periodButton(page),
+): Promise<void> {
+  const [year, month] = value.split('-').map(Number) as [number, number];
+  await trigger.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  for (let i = 0; i < 30; i++) {
+    const shown = Number(await dialog.locator('[aria-live="polite"]').textContent());
+    if (shown === year) break;
+    await dialog.getByRole('button', { name: shown > year ? 'Năm trước' : 'Năm sau' }).click();
+  }
+  await dialog.getByRole('gridcell', { name: `Tháng ${month} năm ${year}` }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toContainText(`Tháng ${String(month).padStart(2, '0')}/${year}`);
+}
+
+/** Open the acceptance flow and fill the period. */
+export async function openFlow(page: Page, period = '2026-09'): Promise<void> {
+  await page.goto(FLOW_URL);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Đối chiếu bảng lương/);
+  if (period) await pickMonth(page, period);
+}
+
+/** Open the flow, upload the 6 fixtures and wait until Run is enabled. */
+export async function uploadFixtures(page: Page): Promise<void> {
+  await openFlow(page);
+  await payrollInput(page).setInputFiles(fixtures('bang_luong_'));
+  await timesheetInput(page).setInputFiles(fixtures('cham_cong_'));
+  await expect(runButton(page)).toHaveText('Bắt đầu');
+  await expect(runButton(page)).toBeEnabled();
+}
+
+export async function runToResult(page: Page): Promise<void> {
+  await runButton(page).click();
+  await expect(page).toHaveURL(new RegExp(`${RESULT_URL}$`), { timeout: 120_000 });
+  await expect(page.getByTestId('kpi').first()).toBeVisible();
+}
+
+/** WCAG relative-luminance contrast ratio of two CSS rgb()/rgba() colors. */
+export function contrastRatio(fg: string, bg: string): number {
+  const lum = (css: string) => {
+    const [r, g, b] = parseRgb(css).map((c) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    }) as [number, number, number];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [a, b] = [lum(fg), lum(bg)].sort((x, y) => y - x) as [number, number];
+  return (a + 0.05) / (b + 0.05);
+}
+
+export function parseRgb(css: string): number[] {
+  const srgb = css.match(/color\(srgb ([^)]+)\)/);
+  if (srgb)
+    return srgb[1]!
+      .split(/\s+/)
+      .slice(0, 3)
+      .map((v) => Number(v) * 255);
+  const m = css.match(/rgba?\(([^)]+)\)/);
+  if (m)
+    return m[1]!
+      .split(/[,\s/]+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map(Number);
+  const hex = css.match(/^#([0-9a-f]{6})$/i);
+  if (hex) return [0, 2, 4].map((i) => parseInt(hex[1]!.slice(i, i + 2), 16));
+  throw new Error(`unsupported color ${css}`);
+}
+
+/** In-memory file for `setInputFiles` (text content, fake data only). */
+export function textFile(name: string, content: string | Buffer, mimeType = 'application/json') {
+  return { name, mimeType, buffer: Buffer.isBuffer(content) ? content : Buffer.from(content) };
+}
+
+/** The open custom picker popover (non-modal), as opposed to the native modal `<dialog>`s. */
+export function pickerPopover(page: Page): Locator {
+  return page.locator('[role="dialog"][aria-modal="false"]');
+}
+
+/**
+ * Pick `YYYY-MM-DD` in the custom date picker with the mouse: open, step the month header with
+ * the prev/next buttons, click the day cell.
+ */
+export async function pickDate(page: Page, trigger: Locator, iso: string): Promise<void> {
+  const [year, month, day] = iso.split('-').map(Number) as [number, number, number];
+  await trigger.click();
+  const popover = pickerPopover(page);
+  await expect(popover).toBeVisible();
+  for (let i = 0; i < 60; i++) {
+    const title = (await popover.locator('[aria-live="polite"]').textContent()) ?? '';
+    const m = /Tháng (\d+) năm (\d+)/.exec(title)!;
+    const shown = Number(m[2]) * 12 + Number(m[1]);
+    if (shown === year * 12 + month) break;
+    await popover
+      .getByRole('button', { name: shown > year * 12 + month ? 'Tháng trước' : 'Tháng sau' })
+      .click();
+  }
+  await popover.getByRole('gridcell', { name: `Ngày ${day} tháng ${month} năm ${year}` }).click();
+  await expect(popover).toHaveCount(0);
+}
+
+/** Everything the page could persist: web storage, IndexedDB names, Cache API, cookies, URL. */
+export async function persistedState(page: Page): Promise<string> {
+  const dump = await page.evaluate(async () => {
+    const entries = (s: Storage) =>
+      Object.fromEntries(
+        Array.from({ length: s.length }, (_, i) => s.key(i)!).map((k) => [k, s.getItem(k)]),
+      );
+    return JSON.stringify({
+      local: entries(localStorage),
+      session: entries(sessionStorage),
+      idb: (await indexedDB.databases()).map((d) => d.name),
+      caches: 'caches' in self ? await caches.keys() : [],
+      cookie: document.cookie,
+      name: window.name,
+      title: document.title,
+    });
+  });
+  return `${page.url()}\n${dump}`;
+}
+
+/**
+ * Pick an option of the custom Select (components/Select.tsx) with the mouse: open the trigger
+ * (found by its label), click the option by its visible text. Native `selectOption` no longer
+ * applies (no `<select>` in the app, MEMORY 2026-10-27 17:50).
+ */
+export async function chooseOption(field: Locator, label: string): Promise<void> {
+  // The open listbox carries the field's name too: keep the combobox only.
+  const trigger = field.and(field.page().getByRole('combobox'));
+  await trigger.click();
+  const listId = await trigger.getAttribute('aria-controls');
+  const list = trigger.page().locator(`[id="${listId}"]`);
+  await list.getByRole('option', { name: label, exact: true }).click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+}
+
+/** Option texts of a custom Select (opens and closes it again). */
+export async function optionTexts(field: Locator): Promise<string[]> {
+  const trigger = field.and(field.page().getByRole('combobox'));
+  await trigger.click();
+  const listId = await trigger.getAttribute('aria-controls');
+  const texts = await trigger
+    .page()
+    .locator(`[id="${listId}"]`)
+    .getByRole('option')
+    .allTextContents();
+  await trigger.press('Escape');
+  return texts.map((t) => t.trim());
+}
+
+/**
+ * Admin tables (AC-UI-54): the less frequent row actions sit in the "Thao tác khác" menu. Opens
+ * the menu of `row` (a row locator) and returns the menu item with the given accessible name.
+ */
+export async function rowMenuItem(row: Locator, name: string | RegExp): Promise<Locator> {
+  const menu = row.getByRole('menu');
+  if (!(await menu.isVisible())) {
+    await row.getByRole('button', { name: /^Thao tác khác cho / }).click();
+    await expect(menu).toBeVisible();
+  }
+  return menu.getByRole('menuitem', { name, exact: typeof name === 'string' });
+}
+
+/** Opens the row menu and chooses an item (see `rowMenuItem`). */
+export async function rowAction(row: Locator, name: string | RegExp): Promise<void> {
+  await (await rowMenuItem(row, name)).click();
+}
+
+/**
+ * Users & Groups (AC-UI-55): the create-account form lives in a dialog opened from
+ * "+ Tạo tài khoản". Opens it unless it is already open; returns the dialog.
+ */
+export async function openCreateAccount(page: Page): Promise<Locator> {
+  const dialog = page.getByRole('dialog', { name: 'Tạo tài khoản' });
+  if (!(await dialog.isVisible())) {
+    await page.getByRole('button', { name: '+ Tạo tài khoản' }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel(/^Username/)).toBeFocused();
+  }
+  return dialog;
+}
