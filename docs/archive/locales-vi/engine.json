@@ -1,0 +1,265 @@
+{
+  "validation": {
+    "fileUnreadable": "Không đọc được file {{file}}: định dạng không hợp lệ hoặc file bị hỏng.",
+    "fileTooLarge": "File quá lớn để xử lý: {{file}} (nội dung giải nén vượt giới hạn an toàn). Hãy tách file thành nhiều file nhỏ hơn.",
+    "fileTypeNotAccepted": "File {{file}}: định dạng không được hỗ trợ (chỉ nhận {{accept}}).",
+    "filesTooFew": "Cần ít nhất {{min}} file, mới có {{count}} file.",
+    "filesTooMany": "Tối đa {{max}} file, đang có {{count}} file.",
+    "slotRequired": "Chưa upload file cho mục \"{{slot}}\".",
+    "sheetNotFound": "File {{file}}: không tìm thấy sheet \"{{sheet}}\".",
+    "sheetIndexNotFound": "File {{file}}: không có sheet thứ {{index}}.",
+    "sheetNoMatchingHeaders": "File {{file}}: không có sheet nào chứa đủ các cột bắt buộc.",
+    "columnMissing": "File {{file}}, sheet {{sheet}}: thiếu cột bắt buộc \"{{column}}\" (tên chấp nhận: {{aliases}}) ở dòng tiêu đề {{headerRow}}.",
+    "columnMissingOptional": "File {{file}}, sheet {{sheet}}: không có cột \"{{column}}\"; giá trị sẽ để trống.",
+    "columnAmbiguous": "File {{file}}, sheet {{sheet}}: có nhiều cột khớp với \"{{column}}\" ({{headers}}); dùng cột đầu tiên.",
+    "columnAmbiguousRequired": "File {{file}}, sheet {{sheet}}: có nhiều cột khớp với cột bắt buộc \"{{column}}\" ({{headers}}); chỉ được giữ 1 cột.",
+    "required": "File {{file}}, dòng {{row}}: cột \"{{column}}\" không được để trống.",
+    "type": "File {{file}}, dòng {{row}}: giá trị \"{{value}}\" ở cột \"{{column}}\" không phải {{type}}.",
+    "numberAmbiguous": "File {{file}}, dòng {{row}}: giá trị \"{{value}}\" ở cột \"{{column}}\" có thể hiểu theo 2 cách; đang đọc là {{parsed}}, hãy kiểm tra lại.",
+    "unique": "Cột \"{{column}}\" bị trùng giá trị: \"{{value}}\" ở {{file}} dòng {{row}} và \"{{otherValue}}\" ở {{otherFile}} dòng {{otherRow}}.",
+    "regex": "File {{file}}, dòng {{row}}: giá trị \"{{value}}\" ở cột \"{{column}}\" không đúng định dạng.",
+    "min": "File {{file}}, dòng {{row}}: giá trị {{value}} ở cột \"{{column}}\" nhỏ hơn {{min}}.",
+    "max": "File {{file}}, dòng {{row}}: giá trị {{value}} ở cột \"{{column}}\" lớn hơn {{max}}.",
+    "rowsTooMany": "File {{file}} có {{count}} dòng, vượt ngưỡng {{max}} dòng.",
+    "noDataRows": "File {{file}}, sheet {{sheet}}: có dòng tiêu đề nhưng không có dòng dữ liệu nào.",
+    "type_string": "chuỗi",
+    "type_integer": "số nguyên",
+    "type_decimal": "số",
+    "type_boolean": "đúng/sai",
+    "type_date": "ngày",
+    "type_datetime": "ngày giờ"
+  },
+  "skipped": {
+    "keyBlank": "Bỏ qua dòng {{row}} của {{file}} (không phải dòng dữ liệu: trống cột {{columns}}).",
+    "keyContains": "Bỏ qua dòng {{row}} của {{file}} (không phải dòng dữ liệu: cột {{column}} chứa \"{{text}}\")."
+  },
+  "compare": {
+    "side": {
+      "left": "A",
+      "right": "B"
+    },
+    "column": {
+      "left": "{{metric}} ({{side}})",
+      "right": "{{metric}} ({{side}})",
+      "diff": "{{metric}} (chênh lệch)",
+      "mismatchedMetrics": "Chỉ tiêu lệch"
+    },
+    "summary": {
+      "metric": "Chỉ tiêu",
+      "tolerance": "Ngưỡng",
+      "matched": "Khớp",
+      "mismatched": "Lệch",
+      "onlyLeft": "Chỉ có ở {{side}}",
+      "onlyRight": "Chỉ có ở {{side}}",
+      "totalDiff": "Tổng chênh lệch",
+      "totalRow": "Tổng (theo khóa)"
+    },
+    "error": {
+      "missingColumn": "Bảng {{side}} không có cột \"{{column}}\".",
+      "duplicateKey": "Bảng {{side}} có khóa trùng: {{key}}.",
+      "notNumeric": "Cột \"{{column}}\" của bảng {{side}} không phải kiểu số.",
+      "missingInput": "Node đối chiếu cần đủ 2 bảng đầu vào (left, right)."
+    }
+  },
+  "executor": {
+    "error": {
+      "duplicateNode": "Flow có 2 node trùng mã \"{{node}}\".",
+      "unknownNodeType": "Loại node \"{{type}}\" chưa được hỗ trợ.",
+      "invalidConfig": "Cấu hình của node \"{{node}}\" không hợp lệ (mục {{path}}).",
+      "unknownNode": "Đường nối tham chiếu tới node không tồn tại \"{{node}}\".",
+      "ambiguousPort": "Node \"{{node}}\" có nhiều cổng; đường nối phải ghi rõ cổng.",
+      "unknownPort": "Node \"{{node}}\" không có cổng \"{{port}}\".",
+      "portConnectedTwice": "Cổng \"{{port}}\" của node \"{{node}}\" được nối nhiều lần.",
+      "missingPort": "Cổng bắt buộc \"{{port}}\" của node \"{{node}}\" chưa được nối.",
+      "cycle": "Flow có vòng lặp (tại node \"{{node}}\"); flow phải là đồ thị không vòng.",
+      "paramRequired": "Chưa nhập tham số bắt buộc \"{{param}}\".",
+      "paramInvalid": "Giá trị tham số \"{{param}}\" không hợp lệ.",
+      "cancelled": "Đã hủy lần chạy.",
+      "nodeFailed": "Node \"{{node}}\" gặp lỗi ngoài dự kiến. Hãy kiểm tra lại file đầu vào; nếu vẫn lỗi, báo cho Admin.",
+      "missingInput": "Node \"{{node}}\" thiếu dữ liệu ở cổng \"{{port}}\".",
+      "unknownSlot": "Flow không có mục upload \"{{slot}}\".",
+      "nodeUnknownSlot": "Node \"{{node}}\" đọc mục upload \"{{slot}}\" nhưng flow không khai báo mục này.",
+      "engineCrashed": "Bộ xử lý dữ liệu gặp sự cố ngoài dự kiến. Hãy thử chạy lại; nếu vẫn lỗi, báo cho Admin.",
+      "noRunContext": "Node chỉ chạy được trong lúc chạy flow.",
+      "inputInvalid": "Mục \"{{slot}}\" còn {{count}} lỗi; hãy sửa file rồi upload lại."
+    }
+  },
+  "report": {
+    "sheetName": "Báo cáo kiểm tra",
+    "slot": "Mục upload",
+    "severity": "Mức",
+    "file": "File",
+    "sheet": "Sheet",
+    "row": "Dòng",
+    "column": "Cột",
+    "message": "Nội dung",
+    "severity_error": "Lỗi",
+    "severity_warning": "Cảnh báo",
+    "severity_skipped": "Bỏ qua",
+    "fileName": "BaoCaoKiemTra.xlsx"
+  },
+  "flow": {
+    "migration": {
+      "acceptCsvRemoved": "Mục upload \"{{slot}}\": đã bỏ định dạng .csv (hệ thống không còn nhận CSV).",
+      "acceptCsvOnlyReplaced": "Mục upload \"{{slot}}\": chỉ nhận .csv nên đã chuyển sang nhận .xlsx, .xls (hệ thống không còn nhận CSV)."
+    }
+  },
+  "select": {
+    "error": {
+      "unknownColumn": "Node \"{{node}}\": cột \"{{column}}\" không có ở bước trước.",
+      "duplicateKey": "Node \"{{node}}\": có 2 cột kết quả cùng mã \"{{key}}\".",
+      "reservedKey": "Node \"{{node}}\": mã cột \"{{key}}\" không được bắt đầu bằng \"_\" (dành cho cột hệ thống)."
+    }
+  },
+  "filter": {
+    "error": {
+      "unknownColumn": "Node \"{{node}}\": cột \"{{column}}\" không có ở bước trước.",
+      "opNotForType": "Node \"{{node}}\": phép so sánh này không dùng được cho cột \"{{column}}\" (kiểu {{type}}).",
+      "invalidValue": "Node \"{{node}}\": giá trị lọc của cột \"{{column}}\" không đúng kiểu {{type}}.",
+      "unknownParam": "Node \"{{node}}\": tham số \"{{param}}\" chưa được khai báo trong flow."
+    }
+  },
+  "sort": {
+    "error": {
+      "unknownColumn": "Node \"{{node}}\": cột \"{{column}}\" không có ở bước trước."
+    }
+  },
+  "join": {
+    "error": {
+      "unknownColumn": "Node \"{{node}}\": cột \"{{column}}\" không có ở bảng đầu vào.",
+      "keyTypeMismatch": "Node \"{{node}}\": cột khóa \"{{left}}\" và \"{{right}}\" khác kiểu dữ liệu.",
+      "columnConflict": "Node \"{{node}}\": cột \"{{column}}\" của bảng phải trùng tên với cột đã có, kể cả sau khi thêm hậu tố."
+    },
+    "warning": {
+      "rowsMultiplied": "Node \"{{node}}\": {{count}} khóa khớp với nhiều dòng ở bảng phải, số dòng kết quả bị nhân lên."
+    }
+  },
+  "union": {
+    "error": {
+      "typeMismatch": "Node \"{{node}}\": cột \"{{column}}\" có kiểu khác nhau giữa các đầu vào.",
+      "missingColumn": "Node \"{{node}}\": đầu vào \"{{port}}\" thiếu cột \"{{column}}\".",
+      "duplicateKey": "Node \"{{node}}\": cột nguồn \"{{key}}\" trùng với một cột đã có."
+    }
+  },
+  "groupBy": {
+    "error": {
+      "unknownColumn": "Node \"{{node}}\": cột \"{{column}}\" không có ở bước trước.",
+      "fnNotForType": "Node \"{{node}}\": phép tổng hợp \"{{fn}}\" không dùng được cho cột \"{{column}}\" (kiểu {{type}}).",
+      "duplicateKey": "Node \"{{node}}\": có 2 cột kết quả cùng mã \"{{key}}\"."
+    }
+  },
+  "dedupe": {
+    "error": {
+      "unknownColumn": "Node \"{{node}}\": cột \"{{column}}\" không có ở bước trước."
+    }
+  },
+  "sql": {
+    "error": {
+      "syntax": "Node \"{{node}}\": câu SQL sai cú pháp. {{message}}",
+      "notSelect": "Node \"{{node}}\": chỉ được dùng một câu SELECT (hoặc WITH … SELECT).",
+      "multipleStatements": "Node \"{{node}}\": chỉ được có một câu lệnh SQL.",
+      "forbidden": "Node \"{{node}}\": câu SQL dùng lệnh hoặc hàm không được phép (đọc file, URL, cấu hình, extension).",
+      "unknownParam": "Node \"{{node}}\": tham số \"{{param}}\" chưa được khai báo trong flow.",
+      "invalidColumnName": "Node \"{{node}}\": tên cột kết quả \"{{column}}\" không hợp lệ (chỉ chữ thường không dấu, số, \"_\"; đặt bằng AS).",
+      "duplicateColumn": "Node \"{{node}}\": có 2 cột kết quả cùng tên \"{{column}}\".",
+      "unsupportedType": "Node \"{{node}}\": cột \"{{column}}\" có kiểu {{type}} chưa được hỗ trợ; hãy CAST sang kiểu khác.",
+      "runtime": "Node \"{{node}}\": câu SQL lỗi khi chạy. {{message}}",
+      "notFinite": "Node \"{{node}}\": cột \"{{column}}\" có giá trị không phải số hữu hạn (NaN hoặc vô cực, VD do chia cho 0); hãy xử lý trường hợp này trong câu SQL (VD NULLIF(mẫu số, 0))."
+    },
+    "warning": {
+      "doubleColumn": "Cột \"{{column}}\" là số thực (DOUBLE); nên CAST(... AS DECIMAL(38,10)) để tránh sai số làm tròn.",
+      "noOrderBy": "Câu SQL không có ORDER BY ở cấp ngoài cùng nên thứ tự dòng kết quả có thể thay đổi."
+    }
+  },
+  "duckdb": {
+    "loading": "Đang tải bộ xử lý dữ liệu (lần đầu khoảng 34 MB)",
+    "error": {
+      "loadFailed": "Không tải được bộ xử lý dữ liệu. Hãy tải lại trang rồi chạy lại; nếu vẫn lỗi, báo cho Admin.",
+      "unavailable": "Bộ xử lý dữ liệu chưa sẵn sàng trong môi trường này.",
+      "decimalOverflow": "Node \"{{node}}\": giá trị thập phân vượt quá giới hạn DECIMAL(38,10) (tối đa 28 chữ số phần nguyên).",
+      "queryFailed": "Node \"{{node}}\" không xử lý được dữ liệu. Hãy kiểm tra lại file đầu vào; nếu vẫn lỗi, báo cho Admin."
+    }
+  },
+  "preview": {
+    "error": {
+      "unknownColumn": "Node \"{{node}}\": cột \"{{column}}\" không có ở bước trước.",
+      "duplicateTitle": "Node \"{{node}}\": tên tab \"{{title}}\" trùng với một bảng xem trước hoặc sheet khác.",
+      "flowInvalid": "Flow trên canvas chưa hợp lệ nên chưa xem trước được; hãy sửa các lỗi trong thanh trạng thái.",
+      "noSample": "Chưa có file mẫu cho {{slot}}.",
+      "sampleInvalid": "File mẫu của {{slot}} có lỗi; hãy xem báo cáo kiểm tra file."
+    }
+  },
+  "inputExcel": {
+    "warning": {
+      "extraColumnsRuntimeOnly": "Mục \"{{slot}}\" giữ cả cột không khai báo: các cột này chỉ dùng được trong node SQL khi chạy, không chọn được ở các node khác."
+    }
+  },
+  "design": {
+    "flow": {
+      "noNodes": "Flow chưa có node nào.",
+      "structure": "Định nghĩa flow không hợp lệ ở mục {{path}}."
+    },
+    "node": {
+      "slotInvalid": "Node \"{{node}}\": mục upload \"{{slot}}\" đang có lỗi cấu hình, chưa xác định được cột."
+    },
+    "param": {
+      "invalidField": "Tham số \"{{param}}\": giá trị ở mục \"{{field}}\" không hợp lệ.",
+      "duplicateKey": "Tham số \"{{param}}\": mã \"{{key}}\" trùng với tham số khác.",
+      "asOfType": "Tham số \"{{param}}\": chỉ tham số kiểu tháng hoặc ngày mới làm ngày hiệu lực được.",
+      "multipleAsOf": "Tham số \"{{param}}\": flow chỉ được có 1 tham số làm ngày hiệu lực.",
+      "noOptions": "Tham số \"{{param}}\": kiểu danh sách chọn cần ít nhất 1 lựa chọn."
+    },
+    "slot": {
+      "invalidField": "Mục upload \"{{slot}}\": giá trị ở mục \"{{field}}\" không hợp lệ.",
+      "key": "Mục upload \"{{slot}}\": mã chỉ gồm chữ thường không dấu, số và \"_\".",
+      "duplicateKey": "Mục upload \"{{slot}}\": mã \"{{key}}\" trùng với mục upload khác.",
+      "dataStartRow": "Mục upload \"{{slot}}\": dòng dữ liệu đầu tiên phải nằm sau các dòng tiêu đề.",
+      "minMaxFiles": "Mục upload \"{{slot}}\": số file tối thiểu không được lớn hơn số file tối đa.",
+      "defaultValue": "Mục upload \"{{slot}}\": giá trị mặc định ở mục \"{{field}}\" không đúng kiểu của cột (hoặc cột đang bắt buộc có giá trị).",
+      "columnKey": "Mục upload \"{{slot}}\": mã cột ở mục \"{{field}}\" không hợp lệ (chữ thường không dấu, số, \"_\"; không bắt đầu bằng \"_\").",
+      "columns": "Mục upload \"{{slot}}\": cần ít nhất 1 cột và mã cột không được trùng.",
+      "rule": "Mục upload \"{{slot}}\": quy tắc kiểm tra ở mục \"{{field}}\" không hợp lệ (VD biểu thức regex không biên dịch được).",
+      "aliases": "Mục upload \"{{slot}}\": mỗi cột cần ít nhất 1 tên cột trong file.",
+      "dateFormats": "Mục upload \"{{slot}}\": định dạng ngày ở mục \"{{field}}\" không hợp lệ.",
+      "skipRows": "Mục upload \"{{slot}}\": cấu hình bỏ qua dòng không hợp lệ (cột khóa phải là cột của mục upload)."
+    }
+  },
+  "formula": {
+    "error": {
+      "syntax": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức sai cú pháp tại ký tự {{pos}}.",
+      "syntax_missingEquals": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức phải bắt đầu bằng dấu \"=\".",
+      "syntax_empty": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức chưa có nội dung sau dấu \"=\".",
+      "syntax_semicolon": "Node \"{{node}}\", cột \"{{formulaColumn}}\": tại ký tự {{pos}} có dấu \";\". Hãy dùng dấu \",\" để ngăn cách đối số và dấu \".\" cho số thập phân (VD =ROUND([A],2), 1.5).",
+      "syntax_unterminatedString": "Node \"{{node}}\", cột \"{{formulaColumn}}\": chuỗi bắt đầu tại ký tự {{pos}} chưa có dấu \" đóng.",
+      "syntax_unterminatedRef": "Node \"{{node}}\", cột \"{{formulaColumn}}\": tham chiếu cột tại ký tự {{pos}} chưa có dấu \"]\" đóng.",
+      "syntax_emptyRef": "Node \"{{node}}\", cột \"{{formulaColumn}}\": tham chiếu cột tại ký tự {{pos}} đang trống; hãy ghi tên cột trong [ ].",
+      "syntax_missingParen": "Node \"{{node}}\", cột \"{{formulaColumn}}\": thiếu dấu \")\" tại ký tự {{pos}}.",
+      "syntax_unbalanced": "Node \"{{node}}\", cột \"{{formulaColumn}}\": dấu \")\" tại ký tự {{pos}} không có dấu \"(\" tương ứng.",
+      "syntax_unexpected": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức sai cú pháp tại ký tự {{pos}}.",
+      "syntax_unexpectedChar": "Node \"{{node}}\", cột \"{{formulaColumn}}\": ký tự không hợp lệ tại vị trí {{pos}}.",
+      "syntax_end": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức kết thúc chưa đủ (thiếu giá trị sau toán tử hoặc dấu \",\").",
+      "syntax_cellRef": "Node \"{{node}}\", cột \"{{formulaColumn}}\": tại ký tự {{pos}}: không dùng địa chỉ ô kiểu Excel (A1); hãy tham chiếu cột bằng [Tên cột].",
+      "syntax_name": "Node \"{{node}}\", cột \"{{formulaColumn}}\": tại ký tự {{pos}} có tên không xác định; tên cột phải đặt trong [ ], chuỗi trong dấu \" \".",
+      "tooLong": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức dài quá {{max}} ký tự.",
+      "tooDeep": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức lồng quá {{max}} cấp.",
+      "tooComplex": "Node \"{{node}}\", cột \"{{formulaColumn}}\": công thức có quá nhiều phép tính nối tiếp nhau (quá {{max}} tầng). Hãy tách thành nhiều cột công thức.",
+      "unknownFunction": "Node \"{{node}}\", cột \"{{formulaColumn}}\": hàm {{fn}} chưa được hỗ trợ. Với phép tính phức tạp hơn, hãy dùng node SQL (code.sql).",
+      "unknownFunction_lookup": "Node \"{{node}}\", cột \"{{formulaColumn}}\": hàm {{fn}} chưa được hỗ trợ. Để tra cứu sang bảng khác, hãy dùng node Join (lấy đủ mọi dòng khớp).",
+      "unknownFunction_other": "Node \"{{node}}\", cột \"{{formulaColumn}}\": hàm {{fn}} chưa được hỗ trợ. Với phép tính phức tạp hơn, hãy dùng node SQL (code.sql).",
+      "argCount": "Node \"{{node}}\", cột \"{{formulaColumn}}\": hàm {{fn}} nhận từ {{min}} đến {{max}} đối số (hoặc sai số lượng đối số).",
+      "unknownColumn": "Node \"{{node}}\", cột \"{{formulaColumn}}\": cột [{{column}}] không có ở bước trước.",
+      "ambiguousTitle": "Node \"{{node}}\", cột \"{{formulaColumn}}\": có nhiều cột cùng tiêu đề \"{{column}}\"; hãy tham chiếu bằng mã cột, VD [ma_cot].",
+      "forwardReference": "Node \"{{node}}\", cột \"{{formulaColumn}}\": cột [{{column}}] được định nghĩa ở dòng phía dưới; chỉ dùng được cột đầu vào và cột phía trên.",
+      "unknownParam": "Node \"{{node}}\", cột \"{{formulaColumn}}\": tham số \"{{param}}\" chưa được khai báo trong flow.",
+      "paramName": "Node \"{{node}}\", cột \"{{formulaColumn}}\": PARAM cần tên tham số trong dấu \" \", VD PARAM(\"ky_luong\").",
+      "typeMismatch": "Node \"{{node}}\", cột \"{{formulaColumn}}\": kết quả công thức là {{inferred}}, không chuyển được sang kiểu {{type}}.",
+      "duplicateKey": "Node \"{{node}}\": có 2 cột công thức cùng mã \"{{key}}\".",
+      "reservedKey": "Node \"{{node}}\": mã cột \"{{key}}\" không được bắt đầu bằng \"_\" (dành cho cột hệ thống).",
+      "rowError": "Node \"{{node}}\", cột \"{{column}}\": dòng {{row}} bị lỗi {{error}} (tổng {{count}} dòng lỗi); lần chạy đã dừng. Hãy kiểm tra dữ liệu nguồn hoặc dùng IFERROR."
+    },
+    "warning": {
+      "mixedTypes": "Cột \"{{column}}\": các nhánh của công thức trả về kiểu khác nhau (số và chữ) nên kết quả là chữ.",
+      "rowErrors": "Node \"{{node}}\", cột \"{{column}}\": {{error}}: {{count}} dòng, các ô này được để trống (các dòng đầu tiên: {{rows}})."
+    }
+  }
+}
