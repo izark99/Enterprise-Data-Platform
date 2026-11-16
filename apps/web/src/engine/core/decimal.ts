@@ -29,8 +29,10 @@ export function parseDecimal(text: string): Decimal {
  * disappears: `25.499999999999996` → `25.5`.
  */
 export function decimalFromNumber(n: number): Decimal {
-  if (!Number.isFinite(n)) throw new RangeError('decimalFromNumber: not a finite number');
-  return new Big(String(Number(n.toPrecision(EXCEL_PRECISION))));
+  // A double near Number.MAX_VALUE rounds up to Infinity at 15 digits: refuse it too.
+  const rounded = Number(n.toPrecision(EXCEL_PRECISION));
+  if (!Number.isFinite(rounded)) throw new RangeError('decimalFromNumber: not a finite number');
+  return new Big(String(rounded));
 }
 
 /** Half-up rounding to the 10 decimal places of `DECIMAL(38,10)` (spec §9.4). */

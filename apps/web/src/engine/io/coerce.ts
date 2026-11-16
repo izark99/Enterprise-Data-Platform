@@ -85,7 +85,10 @@ export function coerceValue(raw: RawValue, type: DataType, opts: CoerceOptions =
       if (typeof raw === 'boolean') return ok(raw ? 'TRUE' : 'FALSE');
       return ok(raw.trim());
     case 'decimal': {
-      if (typeof raw === 'number') return Number.isFinite(raw) ? ok(decimalFromNumber(raw)) : FAIL;
+      if (typeof raw === 'number') {
+        // Finite before rounding is not enough: 1.7976931348623157e308 rounds to Infinity.
+        return Number.isFinite(Number(raw.toPrecision(15))) ? ok(decimalFromNumber(raw)) : FAIL;
+      }
       if (typeof raw !== 'string') return FAIL;
       const text = normalizeNumberText(raw, sep);
       if (text === null) return FAIL;

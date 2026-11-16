@@ -161,6 +161,8 @@ export class ZipArchive {
       onChunk(chunk);
     };
     if (entry.method === METHOD_STORED) {
+      // More stored bytes than declared (declared 0 with data included) is too large (AC-B4-90).
+      if (entry.compressedSize > entry.size) throw tooLarge();
       if (entry.compressedSize !== entry.size) throw unreadable();
       for (let i = 0; i < data.length; i += MAX_STEP) deliver(data.subarray(i, i + MAX_STEP));
     } else if (entry.method === METHOD_DEFLATE) {

@@ -119,6 +119,21 @@ describe('zip limits (AC-B4-90, AC d)', () => {
     expect((zip as unknown as ZipArchive).stats.delivered).toBe(0);
   });
 
+  it('stops a stored entry declared smaller than its data, 0 included', () => {
+    const data = new TextEncoder().encode('hello world');
+    for (const size of [0, 5]) {
+      const stored = {
+        name: 'a.xml',
+        data,
+        method: 0,
+        size,
+        trueSize: data.length,
+        trueCrc: crc32Update(0, data),
+      };
+      expect(readAll(rawZip([stored]), ['a.xml']).key).toBe('validation.fileTooLarge');
+    }
+  });
+
   it('stops small entries that add up past the per-file budget, across reads', () => {
     const { data, crc } = deflateRepeated(15);
     const entries = [0, 1, 2, 3, 4].map((i) => ({
