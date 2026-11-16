@@ -8,7 +8,7 @@
 
 - 2026-11-13: full rewrite from the documents in this repository (ADR-012). The previous code was imported once, verified green (R-00), then removed from the tree (R-02). It stays readable in git: `git show 6fd5868:<path>`.
 - The tree holds documents, `fixtures/`, `vendor/`, the agent system, the empty pnpm workspace of T-R0-01 (placeholder app, lint zones, the five checks) the T-R0-02 limits (bundle budget in `pnpm build`, `apps/web/public/_headers` guarded by `headers.test.ts`) and the T-R0-03 E2E harness (`pnpm test:e2e`: privacy + axe specs) with CI (`.github/workflows/ci.yml`). **P0 done; no feature code yet.** T-R1-01: `vite preview` sends the `_headers` security headers (minus HSTS), so E2E runs under the production CSP (`e2e/ui/csp.spec.ts`).
-- P1 tasks written (§6b, MEMORY 2026-11-13 19:08). T-R1-01 … T-R1-05 done (`packages/flow-schema`; engine core; `.xlsx` reader and slot validation; acceptance flow in TS without DuckDB). T-R1-06 done (DuckDB runtime). T-R1-07 done (transform nodes, pushdown). Next task: **T-R1-08**.
+- P1 tasks written (§6b, MEMORY 2026-11-13 19:08). T-R1-01 … T-R1-05 done (`packages/flow-schema`; engine core; `.xlsx` reader and slot validation; acceptance flow in TS without DuckDB). T-R1-06 done (DuckDB runtime). T-R1-07 done (transform nodes, pushdown). Next task: **T-R1-08** (in progress, size L since owner 3A).
 
 ## 2. Owner decisions
 
@@ -239,11 +239,11 @@ Written 2026-11-13 with the `clarify` skill (MEMORY 2026-11-13 19:08, owner 1A 2
 
 **Verify.** The five commands.
 
-### T-R1-08 · `code.sql` and its guard · M · Depends: T-R1-07
+### T-R1-08 · `code.sql` and its guard · L (was M) · Depends: T-R1-07
 
 **Goal.** Admin SQL that can only read its input views.
 
-**Files.** Create: `src/engine/nodes/code-sql.ts`, `src/engine/duckdb/sql-guard.ts`, tests. Change: `nodes/index.ts`.
+**Files.** Create: `src/engine/nodes/code-sql.ts`, `src/engine/duckdb/sql-guard.ts`, tests. Change: `nodes/index.ts`. Added by owner 1A 1B 2A 3A (MEMORY 2026-11-16 14:30): `vendor/duckdb-json-1.4.3-wasm_eh.duckdb_extension.wasm` (done, `a16469c`), `apps/web/build/duckdb-wasm.ts` (copy + SHA-256 check of the extension), `src/engine/duckdb/db.ts` + `loader.ts` (load `json` before the lock), `core/errors.ts` (screen-only `detail`), `core/executor.ts`, `duckdb/scope.ts`, `duckdb/sql.ts`; the E2E harness page of A-06-7 brought forward from T-R1-10 (`apps/web/e2e-engine.html` + `apps/web/src/e2e-engine/harness.ts`, built only with `--mode e2e`, `apps/web/vite.config.ts`) and `e2e/engine/code-sql.spec.ts` for every test that needs DuckDB's parser (Node cannot load the extension).
 
 **Steps.**
 1. Node per spec §12.1.8: one view per input port (no hidden order column), schema by `DESCRIBE` on empty typed tables, column-name rules, `title` inheritance.
@@ -284,7 +284,7 @@ Written 2026-11-13 with the `clarify` skill (MEMORY 2026-11-13 19:08, owner 1A 2
 5. `acceptance.spec.ts`: the payroll fixture flow in Chromium equals `expected.json`; a formula + transform flow runs with DuckDB loaded from the split parts; the privacy assertions of `e2e/user/privacy.spec.ts` hold on the harness page.
 6. `perf.spec.ts` (only with `HRFLOW_PERF=1`) and CI job `perf` (needs `e2e`, own runner, `timeout-minutes: 45`): input.excel → filter → join → groupBy → formula (10 columns) → output.excel on 1,000,000 × 30; prints stage timings (names and durations only).
 
-**AC.** (a) Production `dist/` contains no `e2e-engine.html` and no harness code. (b) `acceptance.spec.ts` passes in CI. (c) Cancel during a run stops it and the next run works. (d) No off-origin request, empty storage except the DuckDB Cache Storage entry, on the harness page. (e) The `perf` job completes without a crash; timings recorded in the Progress Log. (f) Start-up JS ≤ 240 KiB with the five heavy libraries "not present". (g) `verifier` verdict `PASS` for P1, with S1 checked (expected.json, 182 golden tests) and the readers fuzzed (T-R1-04 report reused or re-run).
+**AC.** (a) Production `dist/` contains no `e2e-engine.html` and no harness code (the page itself exists since T-R1-08; T-R1-10 extends it). (b) `acceptance.spec.ts` passes in CI. (c) Cancel during a run stops it and the next run works. (d) No off-origin request, empty storage except the DuckDB Cache Storage entry, on the harness page. (e) The `perf` job completes without a crash; timings recorded in the Progress Log. (f) Start-up JS ≤ 240 KiB with the five heavy libraries "not present". (g) `verifier` verdict `PASS` for P1, with S1 checked (expected.json, 182 golden tests) and the readers fuzzed (T-R1-04 report reused or re-run).
 
 **Verify.** The five commands, `pnpm test:e2e`, the CI run including `perf`.
 
