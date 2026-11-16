@@ -623,6 +623,10 @@ describe('fixed fuzz findings', () => {
   // in `decimalFromNumber` and the error escaped `readSlot`. It is now a type error of the cell.
   it('a decimal cell holding Number.MAX_VALUE is a type error, readSlot does not throw', () => {
     const bytes = formatWorkbook(['0.00'], [Number.MAX_VALUE]);
-    expect(() => readSlot(anySlot, [{ name: 'max.xlsx', bytes }])).not.toThrow();
+    let result: ReturnType<typeof readSlot> | undefined;
+    expect(() => (result = readSlot(anySlot, [{ name: 'max.xlsx', bytes }]))).not.toThrow();
+    const keys = result?.report.issues.map((i) => i.messageKey) ?? [];
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.every((k) => k === 'validation.type')).toBe(true);
   });
 });
