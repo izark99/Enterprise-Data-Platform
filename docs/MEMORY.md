@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 07:55 - T-R1-02 (Harold trả lời 1A, 2B): (1) xác nhận bảng default/giới hạn mà spec chưa ghi trong `docs/redesign/03-domain-and-data-model.md` §3 (lấy theo bản cũ `6fd5868`, VD slot không khai báo sheet → sheet đầu tiên; `decimalSeparator` mặc định `.`; param `string` không khai báo `log` thì không ghi log; `fileName` mặc định `output.xlsx`); (2) T-R1-02 chưa release vào `main`, gộp release với các task sau.
+
 2026-11-16 07:41 - T-R1-01 (Harold trả lời 1A): giữ export `productionCsp` trong `e2e/support/node-env.mjs` (+ khai báo kiểu trong `node-env.d.mts`) để `e2e/ui/csp.spec.ts` đọc chuỗi CSP thật từ `apps/web/public/_headers`, không chép cứng chuỗi vào spec; đúng cách 18:35 (giá trị cần Node của E2E nằm trong `node-env.mjs`, E2E không dùng `@types/node`).
 
 2026-11-13 19:33 - Xác nhận 2 giả định của P1 (Harold trả lời 1A, 2A): (1) T-R1-10 thêm trang harness chỉ có trong bản build E2E (`apps/web/e2e-engine.html`, build `--mode e2e`) để chạy engine trên Chromium khi P1 chưa có màn hình; bản production không được chứa trang này; (2) job CI `perf` (1.000.000 dòng × 30 cột) chạy mỗi lần push và PR khi repo còn public; khi chuyển repo sang private thì đổi sang chỉ chạy khi push vào `main` hoặc chạy tay.

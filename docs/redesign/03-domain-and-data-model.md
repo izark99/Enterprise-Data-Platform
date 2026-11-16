@@ -152,7 +152,7 @@ Schemas live in `packages/flow-schema/src/` (T-R1-02): `identifier.ts`, `params.
 own issue path: `nodes.<i>.id`, `edges.<i>.from|to`, `inputSlots.<i>.key`, `edges` (cycle).
 
 Defaults and limits the spec does not write (learned from the previous implementation
-`6fd5868:packages/flow-schema/src/`; spec defaults are not repeated here):
+`6fd5868:packages/flow-schema/src/`, confirmed D-03-3; spec defaults are not repeated here):
 
 | Where | Field | Default / rule |
 |-------|-------|----------------|
@@ -358,5 +358,5 @@ the Personal Data Protection Law in force from 2026 — verify the current text)
 | D-03-1 | DECISION | The new schema reproduces this model in a new Supabase project (ADR-012); behaviour reference stays in `docs/archive/spec.md`. |
 | D-03-2 | DECISION | Version lifecycle SQL stays duplicated for flows and reference tables (ADR-007). |
 | A-03-1 | ASSUMPTION | This document is complete enough to rebuild the schema; a gap found while writing the migrations is settled with the owner (`06-plan.md` Q-06-2). |
-| A-03-2 | ASSUMPTION | The §3 defaults the spec does not write (T-R1-02) repeat the previous implementation (CLAUDE.md: read it in git, write the answer here); not yet confirmed by the owner. |
+| D-03-3 | DECISION (MEMORY 2026-11-16 07:55, 1A) | The §3 defaults the spec does not write (T-R1-02) repeat the previous implementation (read in git, written here); confirmed by the owner. |
 | Q-03-1 | OPEN QUESTION | Who calls `purge_run_logs()` and how long `audit_logs` are kept (C-5) is not decided. Default until decided: nothing is purged automatically. |
