@@ -1,4 +1,4 @@
-import type { HarnessReply, HarnessRequest } from './protocol';
+import type { HarnessReply, HarnessRequest } from '../engine/protocol';
 
 /**
  * Engine E2E harness page (A-06-7, brought forward to T-R1-08; built only with `--mode e2e`, never

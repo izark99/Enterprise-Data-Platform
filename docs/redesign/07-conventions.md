@@ -101,6 +101,8 @@ interface EngineErrorInfo { messageKey: string; params: Record<string, unknown>;
 
 Not required: tests of pure presentation, snapshot tests of markup.
 
+Tests that need DuckDB's parser (`json_serialize_sql`, the `code.sql` guard) run in Chromium on the E2E harness page (`e2e/engine/`), because Node cannot load the `json` extension (MEMORY 2026-11-16 14:30, 3A); the rest of the engine stays in Vitest.
+
 Heavy tests (volume, performance) run only with `HRFLOW_HEAVY=1` (e.g. `HRFLOW_HEAVY=1 pnpm --filter @hrflow/web exec vitest run src/engine/__tests__/table.test.ts`); the default run keeps a smaller version of each (MEMORY 2026-11-16 08:13, 1A).
 
 ## 9. Commits and branches

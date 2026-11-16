@@ -1,25 +1,32 @@
 import type { FlowDefinition } from '@hrflow/flow-schema';
-import { isDecimal, parseDecimal } from '../engine/core/decimal';
-import { EngineError } from '../engine/core/errors';
-import { executePlan } from '../engine/core/executor';
-import { planFlow } from '../engine/core/planner';
-import { Table } from '../engine/core/table';
-import type { Schema, Value } from '../engine/core/types';
-import type { DuckDb } from '../engine/duckdb/db';
-import { loadDuckDb } from '../engine/duckdb/loader';
-import { DUCKDB_DIALECT, SqlScope } from '../engine/duckdb/scope';
-import { DuckDbInspector } from '../engine/duckdb/sql-guard';
-import { codeSqlPlugin } from '../engine/nodes/code-sql';
 import {
+  codeSqlPlugin,
+  DUCKDB_DIALECT,
+  DuckDbInspector,
+  EngineError,
+  executePlan,
+  isDecimal,
+  loadDuckDb,
   NODE_PLUGINS,
+  parseDecimal,
+  planFlow,
+  SqlScope,
+  Table,
   type CompileContext,
+  type DuckDb,
+  type HarnessReply,
+  type HarnessRequest,
   type NodePlugin,
   type NodeWarning,
   type ParamValue,
   type PortSchemas,
+  type Schema,
   type SqlInput,
-} from '../engine/nodes/index';
-import type { HarnessReply, HarnessRequest, WireCell, WireError, WireTable } from './protocol';
+  type Value,
+  type WireCell,
+  type WireError,
+  type WireTable,
+} from '../engine/protocol';
 
 /**
  * Engine worker of the E2E harness page (E2E build only, T-R1-08). It runs the real worker-side

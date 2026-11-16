@@ -73,6 +73,18 @@ const ZONES = {
       message: 'ui has no app knowledge: no schema, router, i18n instance or Supabase (02 §3).',
     },
   ],
+  // E2E harness page (E2E build only, T-R1-08): test code that reaches the engine only through
+  // its public surface, like the app (owner 1C, MEMORY 2026-11-16).
+  'e2e-engine': (d) => [
+    outsideSrc(d),
+    layer(
+      d,
+      'app|features|shared|api|ui',
+      'the E2E harness imports only the engine public surface (02 §3).',
+    ),
+    engineInternals(d),
+    SUPABASE,
+  ],
   engine: (d) => [
     outsideSrc(d),
     layer(
@@ -104,7 +116,7 @@ const zone = (files, patterns) => ({
 const layerZones = [
   // src/main.tsx is the composition root: same rules as app.
   zone(globsAt(SRC, 0), ZONES.app(0)),
-  ...['app', 'shared', 'api', 'ui', 'engine'].flatMap((name) =>
+  ...['app', 'shared', 'api', 'ui', 'engine', 'e2e-engine'].flatMap((name) =>
     Array.from({ length: MAX_DEPTH }, (_, i) =>
       zone(globsAt(`${SRC}/${name}`, i), ZONES[name](i + 1)),
     ),

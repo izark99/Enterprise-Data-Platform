@@ -54,7 +54,7 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
 | Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
 
-The DuckDB `json` extension (MEMORY 2026-11-16 14:30, T-R1-08 owner 1A 1B 2A 3A): the `eh` bundle links only `core_functions`, and `json_serialize_sql` (DuckDB's parser, needed by the `code.sql` guard) lives in `json`. It is copied same-origin to `dist/` by the DuckDB build plugin, which fails the build when its SHA-256 differs from `vendor/README.md`, and loaded with `LOAD '<origin>/…/json.duckdb_extension.wasm'` right after the database opens and before the four lock settings (spec §13.1); afterwards no extension can load. DuckDB fetches it itself (a `blob:` URL is refused: the extension name comes from the file name) and checks its signature (`allow_unsigned_extensions` stays off); there is no run-time SHA-256 check (2A). It is always loaded with DuckDB (+820,646 bytes on first use). Node cannot load it, so tests that need DuckDB's parser run in Chromium on the E2E harness page (3A).
+The DuckDB `json` extension (MEMORY 2026-11-16 14:30, T-R1-08 owner 1A 1B 2A 3A): the `eh` bundle links only `core_functions`, and `json_serialize_sql` (DuckDB's parser, needed by the `code.sql` guard) lives in `json`. It is copied same-origin to `dist/duckdb/<version>-<sha12>/json.duckdb_extension.wasm` (its URL reaches the worker through a build define; the path changes only with `duckdb-eh.wasm`, so replacing the extension alone needs a new file name) by the DuckDB build plugin, which fails the build when its SHA-256 differs from `vendor/README.md`, and loaded with `LOAD '<origin>/…/json.duckdb_extension.wasm'` right after the database opens and before the four lock settings (spec §13.1); afterwards no extension can load. DuckDB fetches it itself (a `blob:` URL is refused: the extension name comes from the file name) and checks its signature (`allow_unsigned_extensions` stays off); there is no run-time SHA-256 check (2A). It is always loaded with DuckDB (+820,646 bytes on first use). Node cannot load it, so tests that need DuckDB's parser run in Chromium on the E2E harness page (3A).
 
 `exceljs` 4.4.0 brings 176 transitive packages (155 MIT, 12 ISC, Apache-2.0, BSD-3-Clause, …); `buffers@0.1.1` declares no licence — accepted (MEMORY 2026-11-16 12:41, 4A).
 
@@ -92,6 +92,7 @@ Features (top-level folders under `src/features/`): `auth`, `runner`, `designer`
 Definitions:
 
 - **Engine public surface** = exactly two modules: `src/engine/protocol.ts` (worker message types, `formatIssue`, design/preview result types, `textVars`/`sameVars`) and `src/engine/formula/public.ts` (`FUNCTIONS`, `FUNCTION_GROUPS`, `escapeRef`, `toDisplay`, `toStored`, `FormulaError`, types `RefColumn`, `FormulaParamDef`). Everything else under `src/engine/` is internal.
+- Until T-R1-10, `protocol.ts` holds the messages of the E2E harness page and re-exports the engine parts its worker needs (owner 1C, MEMORY 2026-11-16 18:26); `src/e2e-engine/` (E2E build only) has its own lint zone: engine public surface only, nothing from `app`, `features`, `shared`, `api`, `ui`. T-R1-10 replaces those re-exports with the real worker messages.
 - One exception: `src/shared/engine/engine-client.ts` references `../../engine/worker.ts` as the worker URL and imports `type EngineApi` from it.
 - `ui` may import third-party packages `react`, `react-dom`, `react-i18next` (hook only), `@tanstack/react-table`, `@tanstack/react-virtual`. It never imports the i18n instance, Supabase, or the router. Navigation is passed in as `href` / `onNavigate` props or a `linkComponent` prop.
 - Only `src/api/**` and `src/app/services.ts` may import `@supabase/supabase-js` or call `getSupabase()`. `shared/auth` receives the client through its constructor (type import only).
@@ -115,7 +116,7 @@ repo root/
 │  ├─ redesign/                      00 … 08 + 05-decisions/ (source of truth for design)
 │  └─ archive/                       spec.md, PLAN.md, HANDOFF.md, design-reference.md, patches/, refactor-plan-incremental.md (frozen reference)
 ├─ apps/web/
-│  ├─ index.html, e2e-showcase.html, vite.config.ts, bundle-budget.json, build/, scripts/, public/
+│  ├─ index.html, e2e-showcase.html, e2e-engine.html (E2E build only, T-R1-08), vite.config.ts, bundle-budget.json, build/ (duckdb-wasm.ts, e2e-harness.ts: no harness in a production build), scripts/, public/
 │  └─ src/
 │     ├─ main.tsx
 │     ├─ index.css                   fonts + base layer; imports ui/theme.css
@@ -159,6 +160,7 @@ repo root/
 │     │  ├─ logic/     popover-position.ts  select-logic.ts  menu-logic.ts  tabs-logic.ts  calendar.ts  toast-store.ts
 │     │  └─ __tests__/ ds-v3.test.ts  …
 │     ├─ engine/                     core · io · duckdb · formula · nodes; public surface protocol.ts + formula/public.ts (A-02-2)
+│     ├─ e2e-engine/                 harness.ts, engine-worker.ts — E2E harness page (E2E build only; engine public surface only)
 │     ├─ locales/{vi,en}/
 │     └─ showcase/                   living style guide (E2E build only)
 ├─ packages/flow-schema/             Zod schemas: flow, slots, node configs

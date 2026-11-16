@@ -355,7 +355,10 @@ describe('payroll–timesheet acceptance flow (spec §24, T-R1-05)', () => {
       .readdirSync(root, { recursive: true })
       .filter((f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('payroll-timesheet.test.ts'))
       // The DuckDB runtime itself and its tests (T-R1-06) are the only importers allowed.
-      .filter((f) => !/^duckdb\//.test(f) && !/^__tests__\/duckdb-/.test(f));
+      .filter((f) => !/^duckdb\//.test(f) && !/^__tests__\/duckdb-/.test(f))
+      // `protocol.ts` re-exports DuckDB parts for the E2E harness only (owner 1C of T-R1-08,
+      // MEMORY 2026-11-16); T-R1-10 replaces those re-exports and removes this exemption.
+      .filter((f) => f !== 'protocol.ts');
     expect(files.length).toBeGreaterThan(20);
     const duckdb =
       /(from\s+|import\s*\(?\s*)['"]([^'"]*\/duckdb(\/[^'"]*)?|@duckdb\/duckdb-wasm[^'"]*)['"]/;
