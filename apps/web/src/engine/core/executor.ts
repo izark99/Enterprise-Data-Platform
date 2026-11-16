@@ -59,12 +59,19 @@ export interface SqlRelation {
   readonly rowCount: number | null;
 }
 
+/** The node a DuckDB query belongs to: id, and label (or id) for error messages. */
+export interface SqlOwner {
+  readonly id: string;
+  readonly label: string;
+}
+
 /** What the executor needs from DuckDB (implemented by `engine/duckdb/scope.ts`). */
 export interface SqlRuntime {
   readonly dialect: SqlDialect;
   upload(table: Table, node: string): SqlRelation;
   input(rel: SqlRelation): SqlInput;
-  derive(inputs: readonly SqlRelation[], query: SqlQuery): SqlRelation;
+  /** A lazy relation: `query` over `inputs`, owned by the node that compiled it. */
+  derive(inputs: readonly SqlRelation[], query: SqlQuery, owner: SqlOwner): SqlRelation;
   count(inputs: readonly SqlRelation[], warning: SqlCountWarning, node: string): number;
   materialize(rel: SqlRelation, node: string): SqlRelation;
   read(rel: SqlRelation, node: string): Table;
@@ -240,7 +247,7 @@ export async function executePlan(
             const query = compiled.ports[port.name];
             if (query === undefined) continue;
             const count = readers.get(slot(node.id, port.name)) ?? 0;
-            let rel = sql.derive(relList, query);
+            let rel = sql.derive(relList, query, { id: node.id, label });
             if (query.finish !== undefined || count === 0) {
               const read = sql.read(rel, label);
               const table = query.finish ? query.finish(read) : read;

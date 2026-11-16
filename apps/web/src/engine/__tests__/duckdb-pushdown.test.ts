@@ -202,6 +202,91 @@ describe('lazy DuckDB (spec §13.1)', () => {
   });
 });
 
+describe('a failing step of a chain is reported at its node (owner 1A)', () => {
+  // 31 integer digits: the cast of the bound value to DECIMAL(38,10) fails at run time.
+  const tooBig = `1${'0'.repeat(30)}`;
+  const params = [{ key: 'p', label: 'P', type: 'string' as const, required: false }];
+  const over = (column: string) => ({
+    conditions: [{ column, op: 'gt', value: { param: 'p' } }],
+  });
+  const fails = async (nodes: NodeSpec[], edges: [string, string][]) => {
+    const flow = buildFlow([['a', 'test.source', { name: 'a' }], ...nodes], edges, params);
+    const err = await runFlow(flow, data, { p: tooBig }).catch((e: unknown) => e);
+    const left = db.scalar("SELECT count(*) FROM duckdb_tables() WHERE table_name LIKE 'hr_tab_%'");
+    expect(left).toBe('0');
+    return err;
+  };
+  const sel = (): NodeSpec => [
+    'sel',
+    'transform.select',
+    { columns: [{ from: 'cn' }, { from: 'luong' }] },
+  ];
+  const grp = (): NodeSpec => [
+    'grp',
+    'transform.groupBy',
+    { by: ['cn'], aggregations: [{ key: 'tong', fn: 'sum', column: 'luong' }] },
+  ];
+
+  it('in the middle of the chain', async () => {
+    const err = await fails(
+      [
+        sel(),
+        ['flt', 'transform.filter', over('luong')],
+        ['srt', 'transform.sort', { by: [{ column: 'luong' }] }],
+        grp(),
+      ],
+      [
+        ['a', 'sel'],
+        ['sel', 'flt'],
+        ['flt', 'srt'],
+        ['srt', 'grp'],
+      ],
+    );
+    expect(err).toMatchObject({ messageKey: 'duckdb.error.queryFailed', nodeId: 'flt' });
+    expect((err as { params: object }).params).toEqual({ node: 'flt' });
+  });
+
+  it('at the first step of the chain', async () => {
+    const err = await fails(
+      [['flt', 'transform.filter', over('luong')], sel(), grp()],
+      [
+        ['a', 'flt'],
+        ['flt', 'sel'],
+        ['sel', 'grp'],
+      ],
+    );
+    expect(err).toMatchObject({ messageKey: 'duckdb.error.queryFailed', nodeId: 'flt' });
+  });
+
+  it('at the last step of the chain', async () => {
+    const err = await fails(
+      [sel(), grp(), ['flt', 'transform.filter', over('tong')]],
+      [
+        ['a', 'sel'],
+        ['sel', 'grp'],
+        ['grp', 'flt'],
+      ],
+    );
+    expect(err).toMatchObject({ messageKey: 'duckdb.error.queryFailed', nodeId: 'flt' });
+  });
+
+  it('in a chain read by a TS node', async () => {
+    const err = await fails(
+      [
+        ['flt', 'transform.filter', over('luong')],
+        sel(),
+        ['srt', 'transform.sort', { by: [{ column: 'cn' }] }],
+      ],
+      [
+        ['a', 'flt'],
+        ['flt', 'sel'],
+        ['sel', 'srt'],
+      ],
+    );
+    expect(err).toMatchObject({ messageKey: 'duckdb.error.queryFailed', nodeId: 'flt' });
+  });
+});
+
 // --- AC (i): inferred schema = run schema on a fixture-based flow --------------------------------
 
 function fixtureFlow(): FlowDefinition {

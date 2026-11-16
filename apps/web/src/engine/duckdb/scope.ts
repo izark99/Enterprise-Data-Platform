@@ -1,6 +1,7 @@
 import type { DataType } from '@hrflow/flow-schema';
 import { IdentifierSchema } from '@hrflow/flow-schema';
-import type { SqlRelation, SqlRuntime } from '../core/executor';
+import { EngineError } from '../core/errors';
+import type { SqlOwner, SqlRelation, SqlRuntime } from '../core/executor';
 import type { Table } from '../core/table';
 import type { Schema } from '../core/types';
 import type { SqlCountWarning, SqlDialect, SqlInput, SqlQuery, SqlValue } from '../nodes/index';
@@ -27,6 +28,9 @@ interface Cte {
   readonly name: string;
   readonly sql: string;
   readonly params: readonly SqlValue[];
+  readonly columns: Schema;
+  /** Node whose query this is (a failure found by probing is reported at it). */
+  readonly owner: SqlOwner;
 }
 
 class Rel implements SqlRelation {
@@ -140,20 +144,48 @@ export class SqlScope implements SqlRuntime {
     return { ref: rel.ref, columns: rel.columns };
   }
 
-  derive(inputs: readonly SqlRelation[], query: SqlQuery): SqlRelation {
+  derive(inputs: readonly SqlRelation[], query: SqlQuery, owner: SqlOwner): SqlRelation {
     const rels = inputs.map((r) => this.rel(r));
     counter += 1;
-    const cte: Cte = { name: `"hr$q${counter}"`, sql: query.sql, params: query.params };
+    const cte: Cte = {
+      name: `"hr$q${counter}"`,
+      sql: query.sql,
+      params: query.params,
+      columns: query.columns,
+      owner,
+    };
     const bases = [...new Set(rels.flatMap((r) => r.bases))];
     return new Rel(query.columns, cte.name, [...mergeCtes(rels), cte], null, bases);
   }
 
+  /**
+   * A chain failed: probe its steps in order, each with a count over every column (so no
+   * column is skipped; nothing is materialised), and report the error at the first step whose
+   * probe fails. No probe fails → `failure` (the error of the statement itself). Error path only.
+   */
+  private blame(ctes: readonly Cte[], failure: Error): Error {
+    for (let k = 0; k < ctes.length; k++) {
+      const cte = ctes[k]!;
+      const w = withClause(ctes.slice(0, k + 1));
+      const counts = ['count(*)', ...cte.columns.map((c) => `count(${quoteIdent(c.key)})`)];
+      try {
+        this.db.query(`${w.sql}SELECT ${counts.join(', ')} FROM ${cte.name}`, w.params);
+      } catch (err) {
+        const found = toEngineError(err, cte.owner.label);
+        if (found instanceof EngineError) return found.atNode(cte.owner.id);
+        return found;
+      }
+    }
+    return failure;
+  }
+
   count(inputs: readonly SqlRelation[], warning: SqlCountWarning, node: string): number {
-    const w = withClause(mergeCtes(inputs.map((r) => this.rel(r))));
+    const ctes = mergeCtes(inputs.map((r) => this.rel(r)));
+    const w = withClause(ctes);
     try {
       return Number(this.db.scalar(`${w.sql}${warning.sql}`, [...w.params, ...warning.params]));
     } catch (err) {
-      throw toEngineError(err, node);
+      throw this.blame(ctes, toEngineError(err, node));
     }
   }
 
@@ -173,7 +205,7 @@ export class SqlScope implements SqlRuntime {
       );
     } catch (err) {
       this.drop(name);
-      throw err;
+      throw this.blame(rel.ctes, err instanceof Error ? err : toEngineError(err, node));
     }
     let rows: number;
     try {
