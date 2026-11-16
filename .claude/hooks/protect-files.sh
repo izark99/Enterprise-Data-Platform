@@ -8,9 +8,6 @@ ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 REL="${FILE#"$ROOT"/}"
 deny() { echo "Blocked: $REL - $1" >&2; exit 2; }
 case "$REL" in
-  # TEMPORARY (owner 1B of T-R1-08, MEMORY 2026-11-16): only to add the DuckDB json extension and
-  # its README entry; removed in the next commit.
-  vendor/README.md | vendor/duckdb-json-1.4.3-wasm_eh.duckdb_extension.wasm) ;;
   vendor/*) deny "vendored files are immutable (checksums in vendor/README.md)" ;;
   docs/archive/README.md) ;; # the index is updated when something is archived
   docs/archive/*) deny "archived documents are frozen; write to docs/redesign/ or docs/MEMORY.md" ;;
