@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 13:34 - T-R1-07 (Harold trả lời 1A, 2A): (1) DuckDB lỗi khi vật chất hóa một chuỗi node đã gộp → chạy thử lần lượt từng bước (chỉ đếm dòng, chỉ khi có lỗi) để báo lỗi đúng node gây ra; (2) xác nhận phần DuckDB của plugin contract (`compile`, `runsInSql?`, `warn?`, `emitPreview?`, `SqlRuntime` truyền vào executor), quy tắc pushdown và chi tiết các node transform ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (học từ bản cũ `6fd5868` và lựa chọn của T-R1-07).
+
 2026-11-16 13:11 - T-R1-06 (Harold trả lời 1A, 2A, 3A): (1) giữ kiểm tra "không import DuckDB" của T-R1-05 ở mức `core`, `io`, `nodes` (bỏ qua `duckdb/**` và test `duckdb-*`), cộng test spy loader; (2) cột thứ tự ẩn trong DuckDB (spec §12.1 gọi là `__ord`) đặt tên `hr$ord`, để không cột nào của User trùng được (`IdentifierSchema` không nhận `$`); (3) xác nhận các quy tắc runtime và kiểu dữ liệu DuckDB ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (học từ bản cũ `6fd5868` và lựa chọn của T-R1-06).
 
 2026-11-16 12:52 - T-R1-05 (Harold trả lời 1A): xác nhận các quy tắc đầu ra của `control.compare` và tên file của `output.excel` ghi ở `docs/redesign/03-domain-and-data-model.md` §4.3 (học từ bản cũ `6fd5868`), cùng nội dung run context (`run.slots` giữ kết quả kiểm tra file, tham số đã định dạng sẵn, `emitFile`) và hook tùy chọn `warnings?` trong plugin contract (§4.9).
