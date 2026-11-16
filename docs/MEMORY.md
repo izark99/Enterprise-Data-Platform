@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 13:11 - T-R1-06 (Harold trả lời 1A, 2A, 3A): (1) giữ kiểm tra "không import DuckDB" của T-R1-05 ở mức `core`, `io`, `nodes` (bỏ qua `duckdb/**` và test `duckdb-*`), cộng test spy loader; (2) cột thứ tự ẩn trong DuckDB (spec §12.1 gọi là `__ord`) đặt tên `hr$ord`, để không cột nào của User trùng được (`IdentifierSchema` không nhận `$`); (3) xác nhận các quy tắc runtime và kiểu dữ liệu DuckDB ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (học từ bản cũ `6fd5868` và lựa chọn của T-R1-06).
+
 2026-11-16 12:52 - T-R1-05 (Harold trả lời 1A): xác nhận các quy tắc đầu ra của `control.compare` và tên file của `output.excel` ghi ở `docs/redesign/03-domain-and-data-model.md` §4.3 (học từ bản cũ `6fd5868`), cùng nội dung run context (`run.slots` giữ kết quả kiểm tra file, tham số đã định dạng sẵn, `emitFile`) và hook tùy chọn `warnings?` trong plugin contract (§4.9).
 
 2026-11-16 12:41 - T-R1-05 (Harold trả lời 1A, 2A, 3B, 4A): (1) plugin nhận dữ liệu lần chạy qua trường tùy chọn `run?: { slots, params, emitFile }` của `ExecuteContext`, `executor.ts` truyền vào cho mọi node; thiếu thì báo `executor.error.noRunContext`; (2) chữ tiêu đề trong file kết quả (cột, dòng tổng của `control.compare`…) lấy qua hàm dịch `t(key, vars)` truyền vào context, dựng từ file locale Harold đã sửa; engine không chứa chữ giao diện; (3) `compare.error.duplicateKey` hiển thị đúng giá trị khóa bị trùng như câu chữ hiện có (ngoại lệ trên màn hình của 03 §4.7, không bao giờ vào `run_logs`); (4) giữ `exceljs` 4.4.0; chấp nhận `buffers@0.1.1` (phụ thuộc bắc cầu) không khai báo licence.

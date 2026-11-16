@@ -25,6 +25,7 @@ import {
   DuckDbError,
   DUCKDB_TYPE,
   ORD_COLUMN,
+  ORD_SQL,
   quoteIdent,
   readExpr,
   readKindOf,
@@ -36,7 +37,7 @@ import {
 /*
  * Engine `Table` ⇄ Arrow (spec §9.4, §13.1).
  *
- * Upload: one raw Arrow column per engine column plus `__ord`, in the form that DuckDB casts
+ * Upload: one raw Arrow column per engine column plus `hr$ord`, in the form that DuckDB casts
  * exactly to the canonical type: text for `string`, `date`, `datetime` and `decimal` (the decimal
  * rounded half-up to 10 places, never a double), 64-bit integers for `integer`, booleans as bits.
  * Arrow data is assembled from typed arrays with `makeData`: apache-arrow's builders compile code
@@ -119,7 +120,7 @@ function rawColumn(vec: Vector, column: string, from: number, n: number, node?: 
   }
 }
 
-/** Dense 1-based row numbers `from + 1 … from + n` (`__ord`). */
+/** Dense 1-based row numbers `from + 1 … from + n` (`hr$ord`). */
 function ordColumn(from: number, n: number): Data<Int64> {
   const values = new BigInt64Array(n);
   for (let i = 0; i < n; i++) values[i] = BigInt(from + i + 1);
@@ -128,7 +129,7 @@ function ordColumn(from: number, n: number): Data<Int64> {
 
 /**
  * Rows `[from, from + n)` of `table` as one Arrow IPC stream: the engine columns by key, then
- * `__ord`. Built as an explicit schema + record batch (no object keyed by column name).
+ * `hr$ord`. Built as an explicit schema + record batch (no object keyed by column name).
  */
 export function tableChunkToIpc(table: Table, from: number, n: number, node?: string): Uint8Array {
   const children: Data[] = table.columns.map((c) =>
@@ -235,18 +236,15 @@ export const UPLOAD_CHUNK_ROWS = 122_880;
 
 /**
  * Engine table → DuckDB table `name` with the canonical column types (spec §9.4) and a dense
- * 1-based `__ord` (spec §12.1). Each chunk lands in a raw table and is cast into the typed one, so
+ * 1-based `hr$ord` (spec §12.1). Each chunk lands in a raw table and is cast into the typed one, so
  * a value DuckDB cannot cast fails the upload instead of being stored differently.
  */
 export function uploadTable(db: DuckDb, table: Table, name: string, node?: string): void {
-  if (table.columns.some((c) => c.key === ORD_COLUMN)) {
-    throw new TypeError(`uploadTable: a column may not be named ${ORD_COLUMN}`);
-  }
   const target = quoteIdent(name);
   const raw = quoteIdent(`${name}__raw`);
   const defs = table.columns.map((c) => `${quoteIdent(c.key)} ${DUCKDB_TYPE[c.type]}`);
   const casts = table.columns.map((c) => `${uploadExpr(c.key, c.type)} AS ${quoteIdent(c.key)}`);
-  const ord = quoteIdent(ORD_COLUMN);
+  const ord = ORD_SQL;
   try {
     db.exec(`CREATE TABLE ${target} (${[...defs, `${ord} BIGINT`].join(', ')})`);
     for (let from = 0; from < table.rowCount; from += UPLOAD_CHUNK_ROWS) {
@@ -271,8 +269,8 @@ export interface ReadOptions {
 }
 
 /**
- * DuckDB table or view `name` → engine table (spec §9.4), in `__ord` order when the relation has
- * `__ord` (which is not returned). A column whose type the engine cannot hold →
+ * DuckDB table or view `name` → engine table (spec §9.4), in `hr$ord` order when the relation has
+ * `hr$ord` (which is not returned). A column whose type the engine cannot hold →
  * `sql.error.unsupportedType` naming the column and its DuckDB type.
  */
 export function readTable(db: DuckDb, name: string, options: ReadOptions = {}): Table {
@@ -311,10 +309,10 @@ export function readTable(db: DuckDb, name: string, options: ReadOptions = {}): 
     columns.push({ key, title: titles.get(key) ?? key, kind });
   }
   if (columns.length === 0) {
-    throw new TypeError('readTable: a relation needs at least one column besides __ord');
+    throw new TypeError('readTable: a relation needs at least one column besides hr$ord');
   }
   const select = columns.map((c) => `${readExpr(c.key, c.kind)} AS ${quoteIdent(c.key)}`);
-  const order = ordered ? ` ORDER BY ${quoteIdent(ORD_COLUMN)}` : '';
+  const order = ordered ? ` ORDER BY ${ORD_SQL}` : '';
   let result;
   try {
     result = db.query(`SELECT ${select.join(', ')} FROM ${relation}${order}`);

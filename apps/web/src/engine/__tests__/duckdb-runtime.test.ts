@@ -6,7 +6,7 @@ import { Table } from '../core/table';
 import type { Schema, Value } from '../core/types';
 import { readTable, uploadTable } from '../duckdb/arrow-io';
 import { SECURE_SETTINGS, type DuckDb } from '../duckdb/db';
-import { decimalToSqlText, normKeySql, ORD_COLUMN, quoteIdent, toEngineError } from '../duckdb/sql';
+import { decimalToSqlText, normKeySql, ORD_SQL, quoteIdent, toEngineError } from '../duckdb/sql';
 import { nodeDuckDb } from './duckdb-node';
 
 /**
@@ -177,7 +177,21 @@ describe('type mapping of spec §9.4 (AC d)', () => {
     expect(rowsOf(back)).toEqual(rows.map((r) => r.map(plain)));
   });
 
-  it('keeps the row order of a large upload (several chunks) in __ord', () => {
+  it('round-trips a user column named __ord: the hidden column is hr$ord (owner 2A)', () => {
+    const cols: Schema = [
+      { key: '__ord', title: 'Thứ tự của User', type: 'integer' },
+      { key: 'v', title: 'V', type: 'string' },
+    ];
+    const rows = [
+      [7, 'b'],
+      [3, 'a'],
+    ];
+    const back = roundTrip(Table.fromRows(cols, rows));
+    expect(back.columns).toEqual(cols);
+    expect(rowsOf(back)).toEqual(rows);
+  });
+
+  it('keeps the row order of a large upload (several chunks) in hr$ord', () => {
     const cols: Schema = [{ key: 'n', title: 'N', type: 'integer' }];
     const n = 250_000;
     const table = Table.fromRows(
@@ -186,12 +200,8 @@ describe('type mapping of spec §9.4 (AC d)', () => {
     );
     const name = nextName();
     uploadTable(db, table, name);
-    expect(db.scalar(`SELECT count(DISTINCT ${quoteIdent(ORD_COLUMN)}) FROM ${name}`)).toBe(
-      String(n),
-    );
-    expect(
-      db.scalar(`SELECT count(*) FROM ${name} WHERE "n" + ${quoteIdent(ORD_COLUMN)} <> ${n + 1}`),
-    ).toBe('0');
+    expect(db.scalar(`SELECT count(DISTINCT ${ORD_SQL}) FROM ${name}`)).toBe(String(n));
+    expect(db.scalar(`SELECT count(*) FROM ${name} WHERE "n" + ${ORD_SQL} <> ${n + 1}`)).toBe('0');
     const back = readTable(db, name);
     expect(back.rowCount).toBe(n);
     expect(back.get(0, 'n')).toBe(n);
@@ -216,7 +226,7 @@ describe('type mapping of spec §9.4 (AC d)', () => {
       'b BOOLEAN',
       'dt DATE',
       'ts TIMESTAMP',
-      '__ord BIGINT',
+      'hr$ord BIGINT',
     ]);
   });
 
@@ -361,12 +371,12 @@ describe('type mapping of spec §9.4 (AC d)', () => {
     expect(JSON.stringify(cast.toInfo())).not.toContain('Nguyễn');
   });
 
-  it('reads a view in __ord order', () => {
+  it('reads a view in hr$ord order', () => {
     const cols: Schema = [{ key: 'v', title: 'V', type: 'integer' }];
     const base = nextName();
     uploadTable(db, Table.fromRows(cols, [[3], [1], [2]]), base);
     const view = nextName();
-    db.exec(`CREATE VIEW ${view} AS SELECT "v" * 10 AS w, ${quoteIdent(ORD_COLUMN)} FROM ${base}`);
+    db.exec(`CREATE VIEW ${view} AS SELECT "v" * 10 AS w, ${ORD_SQL} FROM ${base}`);
     const t = readTable(db, view);
     expect(t.columns).toEqual([{ key: 'w', title: 'w', type: 'integer' }]);
     expect(rowsOf(t)).toEqual([[30], [10], [20]]);
@@ -416,7 +426,7 @@ describe('hrflow_norm_key equals normalizeKeyPart (AC e)', () => {
       name,
     );
     const out = db
-      .query(`SELECT ${normKeySql('"k"')} AS n FROM ${name} ORDER BY ${quoteIdent(ORD_COLUMN)}`)
+      .query(`SELECT ${normKeySql('"k"')} AS n FROM ${name} ORDER BY ${ORD_SQL}`)
       .toArray()
       .map((r) => r['n'] as string);
     expect(out).toEqual(golden.map((v) => normalizeKeyPart(v)));

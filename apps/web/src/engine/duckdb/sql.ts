@@ -6,7 +6,7 @@ import { EngineError, type ErrorVars } from '../core/errors';
  * SQL building blocks of the DuckDB runtime (spec §9.2, §9.4, §12.1 "Quy ước chung"):
  * - column keys enter SQL only after `IdentifierSchema` accepts them, inside double quotes;
  * - values enter SQL only as prepared-statement parameters, never as text;
- * - every table uploaded to DuckDB has the hidden row-order column `__ord`;
+ * - every table uploaded to DuckDB has the hidden row-order column `hr$ord` (`ORD_COLUMN`);
  * - decimals are `DECIMAL(38,10)` and cross as decimal text, never through `DOUBLE`;
  * - `hrflow_norm_key` is the SQL twin of `normalizeKeyPart` (engine/core/keys.ts, 03 §4.4).
  */
@@ -14,8 +14,14 @@ import { EngineError, type ErrorVars } from '../core/errors';
 /** Value bound to a prepared statement: every parameter is bound as `VARCHAR` or `NULL` (spec §9.2). */
 export type SqlParam = string | null;
 
-/** Hidden row-order column (spec §12.1): 1-based, dense on upload, never shown to the Admin. */
-export const ORD_COLUMN = '__ord';
+/**
+ * Hidden row-order column (spec §12.1 `__ord`): 1-based, dense on upload, never shown to the Admin.
+ * Named `hr$ord` so no column key can clash with it: `IdentifierSchema` never accepts `$` (owner
+ * 2A, MEMORY 2026-11-16). It is written as `ORD_SQL`, never through `quoteIdent`.
+ */
+export const ORD_COLUMN = 'hr$ord';
+/** `ORD_COLUMN` quoted for SQL. */
+export const ORD_SQL = `"${ORD_COLUMN}"`;
 
 /** Canonical DuckDB type of each engine type (spec §9.4). */
 export const DUCKDB_TYPE: Readonly<Record<DataType, string>> = {
