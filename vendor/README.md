@@ -18,6 +18,29 @@ registry. pnpm installs them via `file:` dependencies and records their integrit
 SheetJS stopped publishing to the npm registry after 0.18.5; current versions are distributed
 only from cdn.sheetjs.com.
 
+## duckdb-json-1.4.3-wasm_eh.duckdb_extension.wasm — DuckDB `json` extension
+
+| Field       | Value                                                                              |
+| ----------- | ---------------------------------------------------------------------------------- |
+| Package     | DuckDB `json` extension, WebAssembly build for the `eh` bundle                     |
+| Version     | DuckDB v1.4.3 (the engine of `@duckdb/duckdb-wasm` 1.32.0)                         |
+| Source      | https://extensions.duckdb.org/v1.4.3/wasm_eh/json.duckdb_extension.wasm            |
+| License     | MIT (DuckDB); signed by the DuckDB Foundation (DuckDB checks the signature on load) |
+| Size        | 820,646 bytes                                                                      |
+| SHA-256     | `b997276c8e15cc3ebdeda340d73d15dc1c4f4755ad281280451cb0a2f79302e9`                 |
+| Used by     | `apps/web` DuckDB runtime: loaded once before the configuration is locked, for the `code.sql` guard (`json_serialize_sql`, owner 1A of T-R1-08) |
+
+The `eh` bundle links only `core_functions` statically, and the locked configuration refuses to
+load extensions, so the parser behind `json_serialize_sql` is shipped here and loaded first. The
+build copies it to `dist/` same-origin and checks this SHA-256; the file name must stay
+`json.duckdb_extension.wasm` when served (DuckDB derives the extension name from it).
+
+### Upgrading
+
+When `@duckdb/duckdb-wasm` moves to a new DuckDB version, download
+`https://extensions.duckdb.org/v<duckdb-version>/wasm_eh/json.duckdb_extension.wasm`, replace this
+file (new name with the version), update the table above and the checksum the build checks.
+
 ### Upgrading
 
 1. Download the new tarball from `https://cdn.sheetjs.com/xlsx-<version>/xlsx-<version>.tgz`
