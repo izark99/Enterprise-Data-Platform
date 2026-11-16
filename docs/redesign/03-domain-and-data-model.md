@@ -279,6 +279,18 @@ node id, flat client info. Never stored: file names, cell values, raw error text
 - Import warns when a column name looks like personal data; the Admin must confirm "not personal data"; the confirmation is audited.
 - Same lifecycle and effective-date rule as flows (4.1, 4.2).
 
+### 4.9 Engine core (`apps/web/src/engine/core/`, T-R1-03, owner confirmed D-03-4)
+
+| Area | Rule |
+|------|------|
+| Planner errors | Keys `executor.error.*` of the owner-edited locale (`docs/archive/locales-vi/engine.json`): bad config → `invalidConfig {node, path}`; `duplicateNode`, `unknownNode`, `unknownPort`, `portConnectedTwice`, `missingPort`, `cycle`. An edge without a port is valid only when the node has exactly one port on that side, else `ambiguousPort`. A plugin with neither `execute` nor `compile` = `unknownNodeType`. |
+| Order | Topological; ties follow the order of `flow.nodes`. A cycle is reported at a node on the cycle. |
+| Error params | `node` = the node label, or its id without a label; edge errors use the id. Never a cell value (4.7). |
+| Executor | Events `node-started` / `node-finished` (rows per output port, `durationMs`). An unexpected exception of a plugin → `executor.error.nodeFailed`, without its raw message. A table is released right after its last reader; on error every table is released, results included. |
+| Perf | User Timing measures `hrflow:<stage>`, stage ∈ `read` · `upload` · `sql` · `write` · `run`; names only, no data. |
+| Decimal | `decimalFromNumber` = 15 significant digits; a decimal column is a `Float64Array` plus a row → exact-text map for values a double cannot hold (spec §9.4); big.js division keeps its default of 20 decimal places before the half-up rounding to 10. |
+| Plugin contract | `checkConfig` returns an array of `EngineError` (it does not throw). The `compile` signature is provisional until T-R1-06 defines it. |
+
 ## 5. Validation rules by layer
 
 | Layer | Validates | Mechanism |
@@ -359,4 +371,5 @@ the Personal Data Protection Law in force from 2026 — verify the current text)
 | D-03-2 | DECISION | Version lifecycle SQL stays duplicated for flows and reference tables (ADR-007). |
 | A-03-1 | ASSUMPTION | This document is complete enough to rebuild the schema; a gap found while writing the migrations is settled with the owner (`06-plan.md` Q-06-2). |
 | D-03-3 | DECISION (MEMORY 2026-11-16 07:55, 1A) | The §3 defaults the spec does not write (T-R1-02) repeat the previous implementation (read in git, written here); confirmed by the owner. |
+| D-03-4 | DECISION (MEMORY 2026-11-16 08:13, 3A) | Engine core rules of 4.9: learned from the previous implementation or chosen in T-R1-03; confirmed by the owner. |
 | Q-03-1 | OPEN QUESTION | Who calls `purge_run_logs()` and how long `audit_logs` are kept (C-5) is not decided. Default until decided: nothing is purged automatically. |

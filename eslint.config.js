@@ -155,7 +155,16 @@ export default tseslint.config(
   {
     files: [`${SRC}/engine/**`],
     languageOptions: { globals: { ...globals.worker } },
-    rules: { 'no-console': 'error' },
+    rules: {
+      'no-console': 'error',
+      // The engine runs in a worker with no DOM and no browser storage (06-plan T-R1-03 AC f).
+      'no-restricted-globals': [
+        'error',
+        ...['document', 'window', 'localStorage', 'sessionStorage', 'indexedDB', 'navigator'].map(
+          (name) => ({ name, message: `No ${name} inside src/engine (02 §2).` }),
+        ),
+      ],
+    },
   },
   // Tool config files must use a default export.
   {

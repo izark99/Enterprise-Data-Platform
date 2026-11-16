@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 08:13 - T-R1-03 (Harold trả lời 1A, 2A, 3A): (1) test khối lượng lớn (1.000.000 dòng × 30 cột) chỉ chạy khi có `HRFLOW_HEAVY=1`; lần chạy mặc định giữ bản 100.000 dòng; (2) ESLint chặn `document`, `window`, `localStorage`, `sessionStorage`, `indexedDB`, `navigator` trong `src/engine` (`no-restricted-globals`, sửa `eslint.config.js` trong T-R1-03); (3) xác nhận các quy tắc lõi engine ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (key lỗi planner, thứ tự topo, tham số `node` = nhãn node, sự kiện tiến độ, giải phóng bảng, tên perf `hrflow:<stage>`, decimal 15 chữ số / `Float64Array` + text chính xác, `checkConfig` trả mảng lỗi, chữ ký `compile` tạm đến T-R1-06).
+
 2026-11-16 07:58 - Cách hỏi (Harold yêu cầu): câu hỏi cần Harold đọc hoặc xác nhận tài liệu phải đưa luôn nội dung vào tin nhắn, hoặc đường dẫn chính xác tới file và mục, để đọc nhanh. Đã ghi vào `CLAUDE.md` (Working with the owner).
 
 2026-11-16 07:55 - T-R1-02 (Harold trả lời 1A, 2B): (1) xác nhận bảng default/giới hạn mà spec chưa ghi trong `docs/redesign/03-domain-and-data-model.md` §3 (lấy theo bản cũ `6fd5868`, VD slot không khai báo sheet → sheet đầu tiên; `decimalSeparator` mặc định `.`; param `string` không khai báo `log` thì không ghi log; `fileName` mặc định `output.xlsx`); (2) T-R1-02 chưa release vào `main`, gộp release với các task sau.

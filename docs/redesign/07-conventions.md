@@ -101,6 +101,8 @@ interface EngineErrorInfo { messageKey: string; params: Record<string, unknown>;
 
 Not required: tests of pure presentation, snapshot tests of markup.
 
+Heavy tests (volume, performance) run only with `HRFLOW_HEAVY=1` (e.g. `HRFLOW_HEAVY=1 pnpm --filter @hrflow/web exec vitest run src/engine/__tests__/table.test.ts`); the default run keeps a smaller version of each (MEMORY 2026-11-16 08:13, 1A).
+
 ## 9. Commits and branches
 
 - Conventional Commits, English: `type(scope): subject` with `type` ∈ `feat | fix | refactor | test | docs | build | ci | chore`.

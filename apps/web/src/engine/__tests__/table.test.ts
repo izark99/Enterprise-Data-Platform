@@ -34,6 +34,76 @@ const ROWS: Value[][] = [
   ['', 0, parseDecimal('-0.1'), null, '2026-01-01T00:00:00', null],
 ];
 
+const HEAVY =
+  (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env
+    .HRFLOW_HEAVY === '1';
+
+/** Builds, measures and releases a generated table of `rowCount` rows × 30 columns (AC c). */
+function buildGeneratedTable(rowCount: number): void {
+  const types: DataType[] = ['string', 'decimal', 'integer', 'date', 'decimal', 'boolean'];
+  const columns = Array.from({ length: 30 }, (_, j) => col(`c${j}`, types[j % types.length]!));
+  const next = mulberry32(1_000_000);
+  const builders = columns.map((c) => new ColumnBuilder(c.type));
+  const cents = new Uint32Array(1000).map(() => Math.floor(next() * 10_000_000));
+  const decimals = Array.from(cents, (c) => parseDecimal(String(c)).div(100));
+  for (let r = 0; r < rowCount; r++) {
+    const pick = Math.floor(next() * 1000);
+    for (let j = 0; j < 30; j++) {
+      const b = builders[j]!;
+      if (pick % 97 === j) {
+        b.append(null);
+        continue;
+      }
+      switch (b.type) {
+        case 'string':
+          b.append(`NV${(r * 31 + j) % 100_000}`);
+          break;
+        case 'decimal':
+          b.append(decimals[(pick + j) % 1000]!);
+          break;
+        case 'integer':
+          b.append(pick - 500);
+          break;
+        case 'date':
+          b.append(`2026-${String(1 + (pick % 12)).padStart(2, '0')}-15`);
+          break;
+        default:
+          b.append(pick % 2 === 0);
+      }
+    }
+  }
+  const table = new Table(
+    columns,
+    builders.map((b) => b.finish()),
+    rowCount,
+  );
+  expect(table.rowCount).toBe(rowCount);
+  const last = table.get(rowCount - 1, 'c0');
+  // A generated blank reads back as null (spec §12.1: blank = null).
+  expect(last === null || (typeof last === 'string' && /^NV\d+$/.test(last))).toBe(true);
+  const bytes = table.byteSize();
+  const proc = (
+    globalThis as {
+      process?: {
+        memoryUsage(): { heapUsed: number; arrayBuffers: number };
+        stdout: { write(text: string): void };
+      };
+    }
+  ).process;
+  const mib = (n: number): string => `${(n / 1024 / 1024).toFixed(1)} MiB`;
+  const mem = proc?.memoryUsage();
+  proc?.stdout.write(
+    `[engine] ${rowCount.toLocaleString('en')} x 30 table: column buffers ${mib(bytes)}` +
+      (mem
+        ? `, process heapUsed ${mib(mem.heapUsed)}, arrayBuffers ${mib(mem.arrayBuffers)}`
+        : '') +
+      '\n',
+  );
+  // 1,000,000 rows measured 240.6 MiB (T-R1-03); the bound leaves room per row.
+  expect(bytes).toBeLessThan(rowCount * 420);
+  table.release();
+}
+
 describe('Table (spec §13)', () => {
   it('reads back every value of every type, blanks as null', () => {
     const table = Table.fromRows(COLUMNS, ROWS);
@@ -100,66 +170,16 @@ describe('Table (spec §13)', () => {
     expect(() => new Table([col('a', 'integer')], [a], 0)).toThrow('does not fit');
   });
 
-  it('builds a 1,000,000-row x 30-column generated table', () => {
-    const ROW_COUNT = 1_000_000;
-    const types: DataType[] = ['string', 'decimal', 'integer', 'date', 'decimal', 'boolean'];
-    const columns = Array.from({ length: 30 }, (_, j) => col(`c${j}`, types[j % types.length]!));
-    const next = mulberry32(1_000_000);
-    const builders = columns.map((c) => new ColumnBuilder(c.type));
-    const cents = new Uint32Array(1000).map(() => Math.floor(next() * 10_000_000));
-    const decimals = Array.from(cents, (c) => parseDecimal(String(c)).div(100));
-    for (let r = 0; r < ROW_COUNT; r++) {
-      const pick = Math.floor(next() * 1000);
-      for (let j = 0; j < 30; j++) {
-        const b = builders[j]!;
-        if (pick % 97 === j) {
-          b.append(null);
-          continue;
-        }
-        switch (b.type) {
-          case 'string':
-            b.append(`NV${(r * 31 + j) % 100_000}`);
-            break;
-          case 'decimal':
-            b.append(decimals[(pick + j) % 1000]!);
-            break;
-          case 'integer':
-            b.append(pick - 500);
-            break;
-          case 'date':
-            b.append(`2026-${String(1 + (pick % 12)).padStart(2, '0')}-15`);
-            break;
-          default:
-            b.append(pick % 2 === 0);
-        }
-      }
-    }
-    const table = new Table(
-      columns,
-      builders.map((b) => b.finish()),
-      ROW_COUNT,
-    );
-    expect(table.rowCount).toBe(ROW_COUNT);
-    expect(table.get(ROW_COUNT - 1, 'c0')).toMatch(/^NV\d+$|^$/);
-    const bytes = table.byteSize();
-    const proc = (
-      globalThis as {
-        process?: {
-          memoryUsage(): { heapUsed: number; arrayBuffers: number };
-          stdout: { write(text: string): void };
-        };
-      }
-    ).process;
-    const mib = (n: number): string => `${(n / 1024 / 1024).toFixed(1)} MiB`;
-    const mem = proc?.memoryUsage();
-    proc?.stdout.write(
-      `[engine] 1,000,000 x 30 table: column buffers ${mib(bytes)}` +
-        (mem
-          ? `, process heapUsed ${mib(mem.heapUsed)}, arrayBuffers ${mib(mem.arrayBuffers)}`
-          : '') +
-        '\n',
-    );
-    expect(bytes).toBeLessThan(400 * 1024 * 1024);
-    table.release();
-  }, 120_000);
+  it('builds a 100,000-row x 30-column generated table', () => {
+    buildGeneratedTable(100_000);
+  }, 30_000);
+
+  // Heavy test (.claude/rules/testing.md): only with HRFLOW_HEAVY=1 (MEMORY, owner 1A).
+  it.runIf(HEAVY)(
+    'builds a 1,000,000-row x 30-column generated table',
+    () => {
+      buildGeneratedTable(1_000_000);
+    },
+    120_000,
+  );
 });
