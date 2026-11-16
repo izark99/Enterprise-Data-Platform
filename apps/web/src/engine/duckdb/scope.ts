@@ -115,10 +115,17 @@ export class SqlScope implements SqlRuntime {
     return value;
   }
 
-  /** Table names are `IdentifierSchema` names (arrow-io quotes them); unique per worker. */
+  /**
+   * Table names are `IdentifierSchema` names (arrow-io quotes them), unique per worker, with a
+   * random 64-bit suffix so Admin SQL cannot guess another table of the run (defence in depth
+   * behind the `code.sql` guard; owner 1A, verifier T-R1-08).
+   */
   private tableName(): string {
     counter += 1;
-    const name = `hr_tab_${counter}`;
+    const random = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) =>
+      b.toString(16).padStart(2, '0'),
+    ).join('');
+    const name = `hr_tab_${counter}_${random}`;
     IdentifierSchema.parse(name);
     return name;
   }

@@ -6,9 +6,9 @@ import { replaceParams } from '../duckdb/sql-guard';
  * DuckDB's parser (the parser-backed fuzz is `e2e/engine/code-sql-fuzz.spec.ts`). Admin SQL is
  * external input. Properties, on random text over the characters that matter to the scanner:
  * - it never throws and stays linear (100,000 characters in well under a second);
- * - it only replaces `$key` by the placeholder and drops at most one `;`: putting `$key` back
- *   gives the input again (minus that `;`), and every dropped `;` is followed only by blanks and
- *   comments;
+ * - it only replaces `$key` by the placeholder and drops the trailing `;`s (owner 1A of T-R1-08,
+ *   second round): putting `$key` back gives the input again minus only `;` characters, all of
+ *   them after the last character that is not a blank, a comment or a `;`;
  * - it never replaces inside quotes, quoted names, dollar quotes or comments it has recognised.
  * Fixed seed; more cases with HRFLOW_HEAVY=1.
  */
@@ -80,7 +80,7 @@ function restore(out: string, keys: readonly string[]): string {
 }
 
 describe('replaceParams fuzz', () => {
-  it('only replaces $key and drops at most one trailing ;', () => {
+  it('only replaces $key and drops only trailing ;s', () => {
     const r = prng(0x1e7e5);
     const runs = HEAVY ? 50_000 : 5_000;
     for (let k = 0; k < runs; k += 1) {
@@ -89,12 +89,19 @@ describe('replaceParams fuzz', () => {
       for (const key of keys) expect(key).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
       const back = restore(out, keys);
       if (back !== sql) {
-        // Exactly one `;` was removed, and only blanks / comments followed it.
-        expect(back.length, JSON.stringify(sql)).toBe(sql.length - 1);
+        // Only `;` characters were removed (back is sql minus some `;`), and the text before the
+        // first removed one is unchanged.
         let i = 0;
         while (i < back.length && back[i] === sql[i]) i += 1;
         expect(sql[i], JSON.stringify(sql)).toBe(';');
-        expect(sql.slice(0, i) + sql.slice(i + 1), JSON.stringify(sql)).toBe(back);
+        let a = i;
+        let b = i;
+        while (a < sql.length) {
+          if (b < back.length && sql[a] === back[b]) b += 1;
+          else expect(sql[a], JSON.stringify(sql)).toBe(';');
+          a += 1;
+        }
+        expect(b, JSON.stringify(sql)).toBe(back.length);
       }
     }
   });
@@ -147,7 +154,8 @@ describe('replaceParams fuzz', () => {
       const out = replaceParams(sql);
       const ms = performance.now() - t0;
       expect(ms, sql.slice(0, 20)).toBeLessThan(1_000);
-      expect(restore(out.sql, out.keys).length).toBeGreaterThanOrEqual(sql.length - 1);
+      const semicolons = sql.split(';').length - 1;
+      expect(restore(out.sql, out.keys).length).toBeGreaterThanOrEqual(sql.length - semicolons);
     }
   });
 });

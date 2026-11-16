@@ -25,6 +25,8 @@ import { DUCKDB_TYPE, DuckDbError, quoteIdent, readKindOf } from './sql';
 const PLACEHOLDER = 'CAST(? AS VARCHAR)';
 /** Deepest `/* … *\/` nesting accepted (the parser is quadratic in it). */
 const MAX_COMMENT_DEPTH = 32;
+/** Deepest parenthesis nesting accepted (owner 2A of T-R1-08, MEMORY 2026-11-16). */
+const MAX_PAREN_DEPTH = 16;
 /** DuckDB's refusal of a statement that is not a query (`json_serialize_sql`). */
 const NOT_SELECT = /^(Only SELECT statements|A CTE needs a SELECT)/;
 
@@ -59,12 +61,50 @@ function ctesOf(node: JsonObject): { name: string; query: Json; recursive: boole
     const query = isObject(value) ? (value['query'] ?? null) : null;
     const inner = isObject(query) ? query['node'] : undefined;
     out.push({
-      name: entry['key'].toLowerCase(),
+      name: entry['key'],
       query,
       recursive: isObject(inner) && inner['type'] === 'RECURSIVE_CTE_NODE',
     });
   }
   return out;
+}
+
+/**
+ * A table or CTE name as DuckDB matches it: ASCII letters fold to lower case, nothing else does
+ * (JS `toLowerCase` folds e.g. the Kelvin sign `K` to `k`, DuckDB does not). A name with a
+ * non-ASCII character is refused (`null`): no view or CTE we create has one (verifier T-R1-08).
+ */
+function foldName(name: string): string | null {
+  // eslint-disable-next-line no-control-regex
+  if (/[^\x00-\x7f]/.test(name)) return null;
+  return name.replace(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
+/**
+ * The body of one CTE. A `RECURSIVE` CTE (`RECURSIVE_CTE_NODE`) sees its own name only in its
+ * recursive branch (`right`): DuckDB binds the anchor (`left`) before the name exists, so there a
+ * table of that name is the real table (verifier T-R1-08).
+ */
+function checkCteBody(
+  query: Json,
+  recursive: boolean,
+  name: string,
+  views: ReadonlySet<string>,
+  scope: ReadonlySet<string>,
+): void {
+  const inner = isObject(query) ? query['node'] : undefined;
+  if (!recursive || !isObject(inner)) {
+    checkTables(query, views, scope);
+    return;
+  }
+  const withSelf = new Set(scope);
+  withSelf.add(name);
+  for (const [key, v] of Object.entries(inner)) {
+    checkTables(v, views, key === 'right' ? withSelf : scope);
+  }
+  for (const [key, v] of Object.entries(query as JsonObject)) {
+    if (key !== 'node') checkTables(v, views, scope);
+  }
 }
 
 /**
@@ -83,17 +123,19 @@ function checkTables(value: Json, views: ReadonlySet<string>, scope: ReadonlySet
   if (type === 'TABLE_FUNCTION' || type === 'SHOW_REF') throw fail('sql.error.forbidden');
   if (type === 'BASE_TABLE') {
     const qualified = Boolean(value['schema_name']) || Boolean(value['catalog_name']);
-    const name = typeof value['table_name'] === 'string' ? value['table_name'].toLowerCase() : '';
-    if (qualified || !(views.has(name) || scope.has(name))) throw fail('sql.error.forbidden');
+    const name = typeof value['table_name'] === 'string' ? foldName(value['table_name']) : null;
+    if (qualified || name === null || !(views.has(name) || scope.has(name))) {
+      throw fail('sql.error.forbidden');
+    }
   }
   const ctes = ctesOf(value);
   if (ctes.length > 0) {
     const before = new Set(scope);
     for (const cte of ctes) {
-      const inBody = new Set(before);
-      if (cte.recursive) inBody.add(cte.name);
-      checkTables(cte.query, views, inBody);
-      before.add(cte.name);
+      const name = foldName(cte.name);
+      if (name === null) throw fail('sql.error.forbidden');
+      checkCteBody(cte.query, cte.recursive, name, views, before);
+      before.add(name);
     }
     for (const [key, v] of Object.entries(value)) {
       if (key !== 'cte_map') checkTables(v, views, before);
@@ -109,23 +151,40 @@ function hasOrderBy(node: Json): boolean {
 }
 
 const IDENT_CHAR = /[A-Za-z0-9_$]/;
+/** A character that continues a name for DuckDB: ASCII name characters and any non-ASCII one. */
+const isNameChar = (ch: string | undefined): boolean =>
+  ch !== undefined && (IDENT_CHAR.test(ch) || ch.charCodeAt(0) >= 0x80);
 const WORD = /^[A-Za-z_][A-Za-z0-9_$]*/;
 const DOLLAR_TAG = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;
 const PARAM = /^\$([A-Za-z_][A-Za-z0-9_]*)/;
 
+/** What `replaceParams` found besides the rewritten text. */
+export interface ReplacedParams {
+  readonly sql: string;
+  readonly keys: string[];
+  /** Deepest `/* … *\/` nesting outside strings and names. */
+  readonly commentDepth: number;
+  /** Deepest parenthesis nesting outside strings, names and comments. */
+  readonly parenDepth: number;
+}
+
 /**
- * Replaces each `$key` outside strings, quoted names and comments by `PLACEHOLDER`, and drops a
- * final `;` (comments after it are kept) so the statement can be wrapped in a subquery. Whatever
- * this scanner gets wrong is caught by the second parse in `check`.
+ * Replaces each `$key` outside strings, quoted names and comments by `PLACEHOLDER`, and drops the
+ * final `;`s (comments after them are kept) so the statement can be wrapped in a subquery. It ends
+ * a `--` comment at `\r` or `\n` and treats a `$` right after a name character (non-ASCII
+ * included) as part of the name, as DuckDB does. Whatever this scanner gets wrong is caught by the
+ * second parse in `check`; its depth counts guard the parser (verifier T-R1-08).
  */
-export function replaceParams(sql: string): { sql: string; keys: string[]; commentDepth: number } {
+export function replaceParams(sql: string): ReplacedParams {
   const keys: string[] = [];
   let commentDepth = 0;
+  let parenDepth = 0;
+  let depth = 0;
   let out = '';
   let i = 0;
   const n = sql.length;
-  /** Offset in `out` of a `;` followed so far only by whitespace and comments. */
-  let semicolon = -1;
+  /** Offsets in `out` of the `;`s followed so far only by whitespace, comments and `;`. */
+  let semicolons: number[] = [];
   const copyTo = (end: number): void => {
     out += sql.slice(i, end);
     i = end;
@@ -134,39 +193,43 @@ export function replaceParams(sql: string): { sql: string; keys: string[]; comme
     const ch = sql[i]!;
     const rest = sql.slice(i, i + 256);
     const comment = (ch === '-' && sql[i + 1] === '-') || (ch === '/' && sql[i + 1] === '*');
-    if (!comment && !/\s/.test(ch)) semicolon = ch === ';' ? out.length : -1;
+    if (!comment && !/\s/.test(ch)) {
+      if (ch === ';') semicolons.push(out.length);
+      else semicolons = [];
+    }
     if (ch === "'" || ch === '"') {
       let j = i + 1;
       while (j < n && !(sql[j] === ch && sql[j + 1] !== ch)) j += sql[j] === ch ? 2 : 1;
       copyTo(Math.min(j + 1, n));
     } else if (ch === '-' && sql[i + 1] === '-') {
-      const j = sql.indexOf('\n', i);
-      copyTo(j < 0 ? n : j);
+      let j = i + 2;
+      while (j < n && sql[j] !== '\n' && sql[j] !== '\r') j += 1;
+      copyTo(j);
     } else if (ch === '/' && sql[i + 1] === '*') {
-      let depth = 0;
+      let nested = 0;
       let j = i;
       while (j < n) {
         if (sql[j] === '/' && sql[j + 1] === '*') {
-          depth += 1;
-          commentDepth = Math.max(commentDepth, depth);
+          nested += 1;
+          commentDepth = Math.max(commentDepth, nested);
           j += 2;
         } else if (sql[j] === '*' && sql[j + 1] === '/') {
-          depth -= 1;
+          nested -= 1;
           j += 2;
-          if (depth === 0) break;
+          if (nested === 0) break;
         } else j += 1;
       }
       copyTo(Math.min(j, n));
-    } else if (ch === '$' && DOLLAR_TAG.test(rest)) {
+    } else if (ch === '$' && DOLLAR_TAG.test(rest) && !(i > 0 && isNameChar(sql[i - 1]))) {
       const tag = DOLLAR_TAG.exec(rest)![0];
       const j = sql.indexOf(tag, i + tag.length);
       copyTo(j < 0 ? n : j + tag.length);
-    } else if (ch === '$' && PARAM.test(rest) && !(i > 0 && IDENT_CHAR.test(sql[i - 1]!))) {
+    } else if (ch === '$' && PARAM.test(rest) && !(i > 0 && isNameChar(sql[i - 1]))) {
       const m = PARAM.exec(rest)!;
       keys.push(m[1]!);
       out += PLACEHOLDER;
       i += m[0].length;
-    } else if (WORD.test(rest) && !(i > 0 && IDENT_CHAR.test(sql[i - 1]!))) {
+    } else if (WORD.test(rest) && !(i > 0 && isNameChar(sql[i - 1]))) {
       const word = WORD.exec(rest)![0];
       if (/^e$/i.test(word) && sql[i + 1] === "'") {
         // E'…' string: a backslash escapes the next character.
@@ -174,10 +237,16 @@ export function replaceParams(sql: string): { sql: string; keys: string[]; comme
         while (j < n && sql[j] !== "'") j += sql[j] === '\\' ? 2 : 1;
         copyTo(Math.min(j + 1, n));
       } else copyTo(i + word.length);
-    } else copyTo(i + 1);
+    } else {
+      if (ch === '(') {
+        depth += 1;
+        parenDepth = Math.max(parenDepth, depth);
+      } else if (ch === ')') depth -= 1;
+      copyTo(i + 1);
+    }
   }
-  if (semicolon >= 0) out = out.slice(0, semicolon) + out.slice(semicolon + 1);
-  return { sql: out, keys, commentDepth };
+  for (const at of semicolons.reverse()) out = out.slice(0, at) + out.slice(at + 1);
+  return { sql: out, keys, commentDepth, parenDepth };
 }
 
 /**
@@ -253,6 +322,8 @@ export class DuckDbInspector implements SqlInspector {
     const rewritten = replaceParams(sql);
     // DuckDB's parser is quadratic in comment nesting; refuse before it runs (verifier T-R1-08).
     if (rewritten.commentDepth > MAX_COMMENT_DEPTH) throw fail('sql.error.syntax');
+    // Deeply nested queries (e.g. CTE inside CTE) take seconds in the parser (owner 2A).
+    if (rewritten.parenDepth > MAX_PAREN_DEPTH) throw fail('sql.error.syntax');
     const ast = this.serialize(sql);
     if (ast.error) {
       const message = ast.error_message ?? '';
@@ -265,7 +336,8 @@ export class DuckDbInspector implements SqlInspector {
     if (statements.length > 1) throw fail('sql.error.multipleStatements');
     const stmt = statements[0]!;
 
-    checkTables(stmt.node, new Set(views.map((v) => v.toLowerCase())), new Set());
+    const viewNames = new Set(views.map((v) => foldName(v) ?? ''));
+    checkTables(stmt.node, viewNames, new Set());
 
     const declared = new Set(params);
     for (const { key } of stmt.named_param_map) {

@@ -90,7 +90,16 @@ describe('replaceParams (the `$key` lexer)', () => {
       sql: 'SELECT $1, ? FROM luong',
       keys: [],
       commentDepth: 0,
+      parenDepth: 0,
     });
+  });
+
+  it('measures parenthesis nesting outside strings and comments; ends -- at \\r; $ after a name', () => {
+    expect(replaceParams('SELECT ((1)), (2)').parenDepth).toBe(2);
+    expect(replaceParams("SELECT '((((' AS s /* (((( */ -- ((((\n").parenDepth).toBe(0);
+    expect(replaceParams('SELECT 1 -- x\r/* a /* b */ */').commentDepth).toBe(2);
+    expect(replaceParams('SELECT 1 AS \u00e9$a$ /* /* */ */').commentDepth).toBe(2);
+    expect(replaceParams('SELECT 1;; ; -- end').sql).toBe('SELECT 1  -- end');
   });
 
   it('measures comment nesting outside strings (deep nesting is refused before the parser)', () => {
