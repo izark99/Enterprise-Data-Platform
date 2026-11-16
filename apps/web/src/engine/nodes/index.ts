@@ -1,4 +1,4 @@
-import type { FlowDefinition } from '@hrflow/flow-schema';
+import type { DataType, FlowDefinition } from '@hrflow/flow-schema';
 import type { EngineError, ErrorVars } from '../core/errors';
 import type { Table } from '../core/table';
 import type { PortDef, Schema } from '../core/types';
@@ -6,6 +6,14 @@ import type { SlotReadResult } from '../io/validation';
 import { controlComparePlugin } from './control-compare';
 import { inputExcelPlugin } from './input-excel';
 import { outputExcelPlugin } from './output-excel';
+import { outputPreviewPlugin } from './output-preview';
+import { transformDedupePlugin } from './transform-dedupe';
+import { transformFilterPlugin } from './transform-filter';
+import { transformGroupByPlugin } from './transform-group-by';
+import { transformJoinPlugin } from './transform-join';
+import { transformSelectPlugin } from './transform-select';
+import { transformSortPlugin } from './transform-sort';
+import { transformUnionPlugin } from './transform-union';
 
 /**
  * Node plugin contract (spec §12, ADR-006) and the registry of node types. One node type = one
@@ -65,12 +73,87 @@ export interface DesignContext {
   readonly t?: Translate;
 }
 
+/** What `output.preview` keeps for the Result screen (spec §12.1.10); it never leaves the worker. */
+export interface PreviewResult {
+  readonly nodeId: string;
+  readonly title: string;
+  /** At most `maxRows` rows, only the configured columns. */
+  readonly table: Table;
+  /** Rows of the input before the cut. */
+  readonly totalRows: number;
+  readonly truncated: boolean;
+}
+
 export interface ExecuteContext {
   readonly nodeId: string;
   readonly flow: FlowDefinition;
   readonly t?: Translate;
   /** Absent at design time; a node that needs it fails with `executor.error.noRunContext`. */
   readonly run?: RunContext;
+  /** Run-time warning of this node (e.g. `join.warning.rowsMultiplied`, counts only). */
+  readonly warn?: (warning: NodeWarning) => void;
+  /** Sink of `output.preview` results, given by the executor. */
+  readonly emitPreview?: (preview: PreviewResult) => void;
+}
+
+/** Value bound to a prepared statement: `VARCHAR` text or `NULL` (spec §9.2). */
+export type SqlValue = string | null;
+
+/**
+ * SQL building blocks given to `compile` by the DuckDB runtime (`engine/duckdb/scope.ts`), so node
+ * files never import DuckDB code (owner 1A, MEMORY 2026-11-16 13:11). Every name passes through
+ * `ident` (`IdentifierSchema` + double quotes); every value is a `?` placeholder bound as `VARCHAR`.
+ */
+export interface SqlDialect {
+  /** A column key, quoted; anything that is not an `IdentifierSchema` name throws. */
+  ident(key: string): string;
+  /** The hidden row-order column (`hr$ord`, 03 §4.9). */
+  readonly ord: string;
+  /** A helper column or alias local to one query (`"hr$<name>"`), never a user column. */
+  aux(name: string): string;
+  /** `hrflow_norm_key(expr)`, the SQL twin of `normalizeKeyPart`, for `VARCHAR` expressions. */
+  normKey(expr: string): string;
+  /** `CAST(expr AS <canonical type>)` (spec §9.4). */
+  cast(expr: string, type: DataType): string;
+  /** Blank test (spec §12.1): `NULL`, and for `string` also a text that is empty after trimming. */
+  isBlank(expr: string, type: DataType): string;
+  /** A `?` placeholder of type `VARCHAR`. */
+  readonly param: string;
+}
+
+/** An input port of a compiled node: the relation to read (already quoted) and its columns. */
+export interface SqlInput {
+  readonly ref: string;
+  readonly columns: Schema;
+}
+
+/**
+ * One output port of a compiled node: a `SELECT` over the input relations returning exactly
+ * `columns` (canonical types, spec §9.4) plus the hidden order column. `params` fill its `?` in
+ * text order. `finish` is a TypeScript step on the materialised result (e.g. the exact `avg` of
+ * `transform.groupBy`); a port with `finish` is materialised at its node.
+ */
+export interface SqlQuery {
+  readonly sql: string;
+  readonly params: readonly SqlValue[];
+  readonly columns: Schema;
+  readonly finish?: (table: Table) => Table;
+}
+
+/** A count query run with the node; a count above zero becomes the warning `{ count }`. */
+export interface SqlCountWarning {
+  readonly sql: string;
+  readonly params: readonly SqlValue[];
+  readonly messageKey: string;
+}
+
+export interface SqlCompiled {
+  readonly ports: Readonly<Record<string, SqlQuery>>;
+  readonly warnings?: readonly SqlCountWarning[];
+}
+
+export interface CompileContext extends ExecuteContext {
+  readonly sql: SqlDialect;
 }
 
 export interface NodePlugin<Config = unknown> {
@@ -105,10 +188,28 @@ export interface NodePlugin<Config = unknown> {
     ctx: ExecuteContext,
   ): PortTables | Promise<PortTables>;
   /**
-   * DuckDB implementation (spec §13.1): one SQL query over the input ports, each given as the name
-   * of a relation. Run by the DuckDB runtime (T-R1-06).
+   * DuckDB implementation (spec §13.1): one query per output port over the input relations. The
+   * executor chains the queries of consecutive DuckDB nodes (pushdown) and materialises only when
+   * needed. Throws an `EngineError` like `inferSchema` (it sees the same input columns).
    */
-  compile?(config: Config, inputs: Readonly<Record<string, string>>): string;
+  compile?(
+    config: Config,
+    inputs: Readonly<Record<string, SqlInput>>,
+    ctx: CompileContext,
+  ): SqlCompiled;
+  /**
+   * For a plugin with both `execute` and `compile`: whether this config on these input columns
+   * runs in DuckDB (e.g. `transform.sort` on a `string` column runs in TypeScript). Without it a
+   * plugin runs in DuckDB exactly when it has `compile` and no `execute`.
+   */
+  runsInSql?(config: Config, inputs: PortSchemas): boolean;
+}
+
+/** Whether a planned node runs in DuckDB for these input columns (spec §13.1). */
+export function runsInSql(plugin: NodePlugin, config: unknown, inputs: PortSchemas): boolean {
+  if (plugin.compile === undefined) return false;
+  if (plugin.execute === undefined) return true;
+  return plugin.runsInSql?.(config, inputs) ?? false;
 }
 
 /** Plugins by node type. */
@@ -119,4 +220,12 @@ export const NODE_PLUGINS: NodeRegistry = {
   [inputExcelPlugin.type]: inputExcelPlugin,
   [controlComparePlugin.type]: controlComparePlugin,
   [outputExcelPlugin.type]: outputExcelPlugin,
+  [outputPreviewPlugin.type]: outputPreviewPlugin,
+  [transformSelectPlugin.type]: transformSelectPlugin,
+  [transformFilterPlugin.type]: transformFilterPlugin,
+  [transformSortPlugin.type]: transformSortPlugin,
+  [transformJoinPlugin.type]: transformJoinPlugin,
+  [transformUnionPlugin.type]: transformUnionPlugin,
+  [transformGroupByPlugin.type]: transformGroupByPlugin,
+  [transformDedupePlugin.type]: transformDedupePlugin,
 };

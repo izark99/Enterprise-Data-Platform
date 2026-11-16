@@ -2,8 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { NODE_PLUGINS } from '../nodes/index';
 
 describe('node registry', () => {
-  it('registers the plugins of the acceptance flow under their type', () => {
-    expect(Object.keys(NODE_PLUGINS)).toEqual(['input.excel', 'control.compare', 'output.excel']);
+  it('registers the plugins of the acceptance flow and the transform nodes under their type', () => {
+    expect(Object.keys(NODE_PLUGINS)).toEqual([
+      'input.excel',
+      'control.compare',
+      'output.excel',
+      'output.preview',
+      'transform.select',
+      'transform.filter',
+      'transform.sort',
+      'transform.join',
+      'transform.union',
+      'transform.groupBy',
+      'transform.dedupe',
+    ]);
     for (const [type, plugin] of Object.entries(NODE_PLUGINS)) expect(plugin.type).toBe(type);
   });
 });
