@@ -8,7 +8,7 @@
 
 - 2026-11-13: full rewrite from the documents in this repository (ADR-012). The previous code was imported once, verified green (R-00), then removed from the tree (R-02). It stays readable in git: `git show 6fd5868:<path>`.
 - The tree holds documents, `fixtures/`, `vendor/`, the agent system, the empty pnpm workspace of T-R0-01 (placeholder app, lint zones, the five checks) the T-R0-02 limits (bundle budget in `pnpm build`, `apps/web/public/_headers` guarded by `headers.test.ts`) and the T-R0-03 E2E harness (`pnpm test:e2e`: privacy + axe specs) with CI (`.github/workflows/ci.yml`). **P0 done; no feature code yet.** T-R1-01: `vite preview` sends the `_headers` security headers (minus HSTS), so E2E runs under the production CSP (`e2e/ui/csp.spec.ts`).
-- P1 tasks written (§6b, MEMORY 2026-11-13 19:08). T-R1-01 … T-R1-04 done (`packages/flow-schema`; engine core; `.xlsx` reader and slot validation in `src/engine/io/`). Next task: **T-R1-05** (AC g question open).
+- P1 tasks written (§6b, MEMORY 2026-11-13 19:08). T-R1-01 … T-R1-04 done (`packages/flow-schema`; engine core; `.xlsx` reader and slot validation in `src/engine/io/`). Next task: **T-R1-05**.
 
 ## 2. Owner decisions
 
@@ -201,7 +201,7 @@ Written 2026-11-13 with the `clarify` skill (MEMORY 2026-11-13 19:08, owner 1A 2
 3. `control.compare` per spec §24.2 and 03 §4.3 (4 ports, `nullAsZero`, tolerance boundary, decimal arithmetic only).
 4. `output.excel` per spec §11 (bold header, freeze row 1, auto-filter, widths, number formats by type); above 2,000,000 cells the streaming writer with the same layout.
 
-**AC.** (a) Running `flow.json` on the 6 fixture files equals `expected.json` (63 match, 9 mismatched, 3 only payroll, 3 only timesheet — AC-04), compared field by field. (b) A 0.5 difference with tolerance 0.5 is a match (AC-05). (c) The written workbook has exactly the 4 sheet names of AC-06, bold header, frozen first row, auto-filter. (d) Raising the OT tolerance to 5 turns a 4-hour OT difference into a match (AC-10, engine level). (e) The written file read back by the T-R1-04 reader equals the result tables. (f) The streaming writer and ExcelJS produce the same cell values and styles on a 10,000-row table. (g) No DuckDB code is loaded by this flow (spec §13.1 lazy load; test asserts the loader is not called).
+**AC.** (a) Running `flow.json` on the 6 fixture files equals `expected.json` (63 match, 9 mismatched, 3 only payroll, 3 only timesheet — AC-04), compared field by field. (b) A 0.5 difference with tolerance 0.5 is a match (AC-05). (c) The written workbook has exactly the 4 sheet names of AC-06, bold header, frozen first row, auto-filter. (d) Raising the OT tolerance to 5 turns a 4-hour OT difference into a match (AC-10, engine level). (e) The written file read back by the T-R1-04 reader equals the result tables. (f) The streaming writer and ExcelJS produce the same cell values and styles on a 10,000-row table. (g) No DuckDB code is loaded by this flow (spec §13.1 lazy load). Owner 1A (MEMORY 2026-11-16 09:35): the loader exists only from T-R1-06, so the test asserts that the three plugins of this flow have `execute` and no `compile`, and that no file under `src/engine` imports `@duckdb/duckdb-wasm` or `engine/duckdb`; the loader spy runs in T-R1-06 step 7.
 
 **Verify.** The five commands.
 
@@ -218,6 +218,7 @@ Written 2026-11-13 with the `clarify` skill (MEMORY 2026-11-13 19:08, owner 1A 2
 4. `db.ts`: `:memory:`, `enable_external_access = false`, `autoinstall_known_extensions = false`, `autoload_known_extensions = false`, then `lock_configuration = true`.
 5. `arrow-io.ts` + `sql.ts`: the type table of spec §9.4 (decimal as text + `CAST` to `DECIMAL(38,10)`, never `DOUBLE`; `DOUBLE` results through `decimalFromNumber`; unsupported types → `sql.error.unsupportedType`; overflow → `duckdb.error.decimalOverflow`), hidden `__ord`, quoted identifiers checked by `IdentifierSchema`, values only as prepared parameters, `hrflow_norm_key` SQL macro.
 6. Test helper: the same `duckdb-eh.wasm` through the Node blocking bindings (uses `@types/node`, test files only).
+7. The payroll–timesheet flow of T-R1-05 runs once with a spy on `loader.ts`: the loader is never called (T-R1-05 AC g, owner 1A, MEMORY 2026-11-16 09:35).
 
 **AC.** (a) The four settings read back as set and `SET enable_external_access = true` fails. (b) `read_csv('https://…')`, `COPY … TO`, `LOAD httpfs` fail. (c) A prepared value `x' OR 1=1 --` comes back unchanged. (d) Every row of the §9.4 table round-trips; a `DOUBLE` never appears in generated SQL for decimals. (e) `hrflow_norm_key` equals `normalizeKeyPart` on the T-R1-03 golden list. (f) Loader unit tests (fake fetch / caches): good parts load; one bad part reloads once then gives `duckdb.error.loadFailed`; Cache Storage holds only the manifest-keyed WASM. (g) `pnpm build`: every `dist/` file < 25 MiB; DuckDB marker "not present" in start-up JS; start-up JS printed.
 

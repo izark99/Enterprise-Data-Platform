@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 09:35 - T-R1-05 AC (g) (Harold trả lời 1A): loader DuckDB chỉ có từ T-R1-06, nên ở T-R1-05 test kiểm 3 plugin của flow lương – chấm công chỉ có `execute` (không `compile`) và không file nào trong `src/engine` import `@duckdb/duckdb-wasm` hay `engine/duckdb`; T-R1-06 thêm bước 7: chạy lại flow này với spy trên `loader.ts`, loader không được gọi.
+
 2026-11-16 09:26 - T-R1-04 (Harold trả lời 2A, 2B ở lượt trước): (1) xác nhận các quy tắc đọc file `.xlsx` ghi ở `docs/redesign/03-domain-and-data-model.md` §4.6 (học từ bản cũ `6fd5868` và lựa chọn của T-R1-04); (2) giữ từ 08:52: cột `string` hiển thị ngày dạng ngắn của Excel (`m/d/yy`) thành `dd/mm/yyyy`; giải nén entry `.xlsx` chỉ dùng `fflate` (`Inflate`, theo luồng, đếm byte, dừng sớm), không dùng `DecompressionStream`.
 
 2026-11-16 08:13 - T-R1-03 (Harold trả lời 1A, 2A, 3A): (1) test khối lượng lớn (1.000.000 dòng × 30 cột) chỉ chạy khi có `HRFLOW_HEAVY=1`; lần chạy mặc định giữ bản 100.000 dòng; (2) ESLint chặn `document`, `window`, `localStorage`, `sessionStorage`, `indexedDB`, `navigator` trong `src/engine` (`no-restricted-globals`, sửa `eslint.config.js` trong T-R1-03); (3) xác nhận các quy tắc lõi engine ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (key lỗi planner, thứ tự topo, tham số `node` = nhãn node, sự kiện tiến độ, giải phóng bảng, tên perf `hrflow:<stage>`, decimal 15 chữ số / `Float64Array` + text chính xác, `checkConfig` trả mảng lỗi, chữ ký `compile` tạm đến T-R1-06).
