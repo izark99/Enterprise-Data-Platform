@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { gridFromWorksheet, SHEETJS_READ_OPTIONS } from '../xls';
+import { gridFromWorksheet, SHEETJS_READ_OPTIONS } from './sheetjs-oracle';
 import { openXlsx, type CellRead, type Grid } from '../xlsx-stream';
 import { FIXTURE_FILES, readFixture, sheetXml, workbookParts, xlsxFrom } from './helpers';
 

@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { openWorkbook, readSlot } from '../validation';
 import { FileReadError } from '../zip';
-import { SHEETJS_READ_OPTIONS } from '../xls';
 import { FIXTURE_FILES, fixtureSlot, HEAVY, readFixture } from './helpers';
 
 /**
@@ -15,12 +14,6 @@ import { FIXTURE_FILES, fixtureSlot, HEAVY, readFixture } from './helpers';
  */
 
 const N = HEAVY ? 400 : 25;
-/**
- * In-process `.xls` cases stay at the fast count even with HRFLOW_HEAVY: SheetJS loops forever on
- * some mutated BIFF streams (KNOWN BUG below, first at case 133 of seed 0x5eed0007) and a
- * synchronous loop cannot be timed out in-process.
- */
-const XLS_CASES = 100;
 const FILE_KEYS = new Set(['validation.fileTooLarge', 'validation.fileUnreadable']);
 /** One case must stay well under the test timeout. */
 const MAX_CASE_MS = 5_000;
@@ -431,8 +424,7 @@ describe('reader fuzz (T-R1-04 AC h)', () => {
       const body = new Uint8Array(len);
       for (let i = 0; i < len; i++) body[i] = int(rnd, 256);
       const prefix = prefixes[n % prefixes.length]!;
-      const ext = prefix.length === 8 ? '.xls' : '.xlsx';
-      check('random', `random #${n}`, concat(prefix, body), slots.bang_luong!, ext);
+      check('random', `random #${n}`, concat(prefix, body), slots.bang_luong!, '.xlsx');
     }
   });
 
@@ -559,7 +551,9 @@ describe('reader fuzz (T-R1-04 AC h)', () => {
     }
   });
 
-  it('hostile .xls (OLE2 / BIFF) built from the fixtures', { timeout: 300_000 }, () => {
+  // Only `.xlsx` is read (owner 1B): OLE2 `.xls` bytes, honest or mutated, are always unreadable and
+  // never reach SheetJS (which looped forever on some mutated BIFF streams, verifier T-R1-04).
+  it('OLE2 (.xls) bytes renamed .xlsx, honest and mutated', { timeout: 120_000 }, () => {
     const rnd = prng(0x5eed0007);
     const xlsFiles = fixtures.map((f) => {
       const wb = XLSX.read(f.bytes, { type: 'array' });
@@ -568,10 +562,15 @@ describe('reader fuzz (T-R1-04 AC h)', () => {
         bytes: new Uint8Array(XLSX.write(wb, { bookType: 'biff8', type: 'array' }) as ArrayBuffer),
       };
     });
-    // The honest conversions read.
-    for (const f of xlsFiles)
-      check('xls', `xls honest ${f.name}`, f.bytes, slotFor(f.name), '.xls');
-    for (let n = 0; n < XLS_CASES; n++) {
+    for (const f of xlsFiles) {
+      expect(
+        readSlot(slotFor(f.name), [{ name: 'x.xlsx', bytes: f.bytes }]).report.issues.map(
+          (i) => i.messageKey,
+        ),
+      ).toEqual(['validation.fileUnreadable']);
+      check('ole2-renamed', `ole2 honest ${f.name}`, f.bytes, slotFor(f.name), '.xlsx');
+    }
+    for (let n = 0; n < N * 4; n++) {
       const f = xlsFiles[n % xlsFiles.length]!;
       let b = f.bytes.slice();
       switch (int(rnd, 4)) {
@@ -598,7 +597,7 @@ describe('reader fuzz (T-R1-04 AC h)', () => {
           }
         }
       }
-      check('xls', `xls #${n} ${f.name}`, b, slotFor(f.name), '.xls');
+      check('ole2-renamed', `ole2 #${n} ${f.name}`, b, slotFor(f.name), '.xlsx');
     }
   });
 
@@ -617,50 +616,6 @@ describe('reader fuzz (T-R1-04 AC h)', () => {
     const out = proc.env.HRFLOW_FUZZ_REPORT;
     if (out) proc.getBuiltinModule('node:fs').writeFileSync(out, JSON.stringify(tallies, null, 1));
   });
-});
-
-interface NodeProc {
-  execPath: string;
-  getBuiltinModule(id: 'node:child_process'): {
-    spawnSync(
-      cmd: string,
-      args: string[],
-      opts: { input: Uint8Array; timeout: number },
-    ): { status: number | null; signal: string | null; error?: Error };
-  };
-  getBuiltinModule(id: 'node:module'): {
-    createRequire(url: string): { resolve(id: string): string };
-  };
-}
-
-describe('KNOWN BUG', () => {
-  // SheetJS (the `.xls` path of `openXls`) never returns on a 10 KiB `.xls` whose first NUMBER
-  // record length is changed from 14 to 118: the worker would hang with no error and no way to
-  // stop it. Run out of process so the hang can be timed out.
-  it.fails(
-    'a .xls with a bad BIFF record length is read or refused within 10 s',
-    { timeout: 30_000 },
-    () => {
-      const proc = (globalThis as unknown as { process: NodeProc }).process;
-      const wb = XLSX.read(readFixture('bang_luong_CN02_092026.xlsx'), { type: 'array' });
-      const bytes = new Uint8Array(
-        XLSX.write(wb, { bookType: 'biff8', type: 'array' }) as ArrayBuffer,
-      );
-      // NUMBER record (0x0203), length 0x000e: the length becomes 0x76.
-      expect([bytes[0x17a1], bytes[0x17a2], bytes[0x17a3], bytes[0x17a4]]).toEqual([3, 2, 0x0e, 0]);
-      bytes[0x17a3] = 0x76;
-      const xlsxPath = proc
-        .getBuiltinModule('node:module')
-        .createRequire(import.meta.url)
-        .resolve('xlsx');
-      const script = `const X=require(${JSON.stringify(xlsxPath)});const c=[];process.stdin.on('data',d=>c.push(d));process.stdin.on('end',()=>{try{X.read(new Uint8Array(Buffer.concat(c)),${JSON.stringify(SHEETJS_READ_OPTIONS)})}catch{}process.exit(0)});`;
-      const run = proc
-        .getBuiltinModule('node:child_process')
-        .spawnSync(proc.execPath, ['-e', script], { input: bytes, timeout: 10_000 });
-      expect(run.signal).toBeNull();
-      expect(run.status).toBe(0);
-    },
-  );
 });
 
 describe('fixed fuzz findings', () => {

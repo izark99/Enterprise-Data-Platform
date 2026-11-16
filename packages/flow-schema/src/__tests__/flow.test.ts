@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import payrollFlow from '../../../../fixtures/payroll-timesheet/flow.json';
 import { FlowDefinitionSchema, hasCycle } from '../flow';
+import { migrateFlowDefinition } from '../migrate';
 
 const node = (id: string) => ({ id, type: 'transform.select', config: {} });
 const minimal = { schemaVersion: 1, nodes: [node('a')] };
@@ -11,8 +12,15 @@ function issuePaths(input: unknown): PropertyKey[][] {
 }
 
 describe('FlowDefinitionSchema', () => {
-  it('parses the acceptance flow fixture', () => {
-    const result = FlowDefinitionSchema.safeParse(payrollFlow);
+  it('parses the acceptance flow fixture after the migration the engine always runs', () => {
+    // The fixture predates owner decision 1B (only .xlsx): its slots still list `.xls` (spec §8.1).
+    expect(FlowDefinitionSchema.safeParse(payrollFlow).success).toBe(false);
+    const { definition, notices } = migrateFlowDefinition(payrollFlow);
+    expect(notices.map((n) => [n.code, n.slot])).toEqual([
+      ['acceptXlsRemoved', 'bang_luong'],
+      ['acceptXlsRemoved', 'cham_cong'],
+    ]);
+    const result = FlowDefinitionSchema.safeParse(definition);
     expect(result.error?.issues ?? []).toEqual([]);
     expect(result.data?.nodes.map((n) => n.id)).toEqual(['in_luong', 'in_cc', 'cmp', 'out']);
   });

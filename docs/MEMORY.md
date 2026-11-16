@@ -152,6 +152,8 @@
 
 ## Flow & xử lý
 
+2026-11-16 09:26 - Input slot chỉ nhận file `.xlsx` (Harold trả lời 1B, T-R1-04): không nhận `.csv` (giữ từ 2026-10-26 13:08) và không nhận `.xls` (SheetJS treo vô hạn với một số file `.xls` hỏng, verifier T-R1-04). File `.xls` đổi tên thành `.xlsx` → `validation.fileUnreadable`. Flow đã lưu có `.xls` / `.csv` trong `accept`: `migrateFlowDefinition` bỏ đi kèm notice; slot không còn định dạng nào → `.xlsx`. SheetJS chỉ còn dùng để định dạng số (`SSF`) và làm đối chứng trong test.
+
 2026-11-09 07:34 - Thông báo lỗi Input slot / Tham số của kiểm tra thiết kế (Designer và kiểm tra trước Publish ở màn Version) gọi mục theo nhãn form (VD "Cột 1, Kiểu dữ liệu"), không lộ đường dẫn cấu hình nội bộ (HANDOFF §4.12a); làm trong vòng so ảnh pixel, trước khi sinh ảnh gốc.
 
 2026-11-06 12:32 - Designer: nối cạnh bằng bàn phím: chọn node → nút "Nối tới…" trên thanh công cụ, phím tắt Ctrl+E, mở danh sách cổng đích có tìm kiếm (Select tự làm), Enter để nối; câu đọc cho trình đọc màn hình (`sr-only`, không hiển thị) là "Đã nối A → B" — ngoại lệ riêng của quy tắc §25.4 cho key `connectMenu.done`; nối bằng chuột giữ nguyên.
@@ -210,8 +212,6 @@
 
 2026-10-26 13:08 - Mã trùng giữa 2 file: đánh dấu lỗi trên cả 2 file liên quan.
 
-2026-10-26 13:08 - Không nhận file CSV: bỏ `.csv` khỏi danh sách định dạng nhận của input slot (chỉ .xlsx, .xls).
-
 2026-10-26 13:08 - Tham số kiểu ngày trong tên file kết quả định dạng `YYYY-MM-DD`.
 
 2026-10-26 12:37 - Tham số kiểu tháng trong tên file kết quả định dạng `YYYY-MM` (VD `DoiChieu_2026-09.xlsx`) để sắp xếp theo tên đúng thứ tự thời gian.
@@ -242,7 +242,7 @@
 
 ## Kỹ thuật & tổ chức
 
-2026-11-16 08:52 - T-R1-04 (Harold trả lời 1A, 2A, 3A): (1) file `.xls` thực chất là HTML/XML (bản xuất của một số hệ thống HR) bị từ chối với `validation.fileUnreadable`; chỉ nhận `.xls` dạng OLE2 thật; (2) cột `string` hiển thị ngày dạng ngắn của Excel (`m/d/yy`) thành `dd/mm/yyyy`; (3) giải nén entry `.xlsx` chỉ dùng `fflate` (`Inflate`, theo luồng, đếm byte và dừng sớm) ở mọi nơi, không dùng `DecompressionStream`.
+2026-11-16 09:26 - T-R1-04 (Harold trả lời 2A, 2B ở lượt trước): (1) xác nhận các quy tắc đọc file `.xlsx` ghi ở `docs/redesign/03-domain-and-data-model.md` §4.6 (học từ bản cũ `6fd5868` và lựa chọn của T-R1-04); (2) giữ từ 08:52: cột `string` hiển thị ngày dạng ngắn của Excel (`m/d/yy`) thành `dd/mm/yyyy`; giải nén entry `.xlsx` chỉ dùng `fflate` (`Inflate`, theo luồng, đếm byte, dừng sớm), không dùng `DecompressionStream`.
 
 2026-11-16 08:13 - T-R1-03 (Harold trả lời 1A, 2A, 3A): (1) test khối lượng lớn (1.000.000 dòng × 30 cột) chỉ chạy khi có `HRFLOW_HEAVY=1`; lần chạy mặc định giữ bản 100.000 dòng; (2) ESLint chặn `document`, `window`, `localStorage`, `sessionStorage`, `indexedDB`, `navigator` trong `src/engine` (`no-restricted-globals`, sửa `eslint.config.js` trong T-R1-03); (3) xác nhận các quy tắc lõi engine ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (key lỗi planner, thứ tự topo, tham số `node` = nhãn node, sự kiện tiến độ, giải phóng bảng, tên perf `hrflow:<stage>`, decimal 15 chữ số / `Float64Array` + text chính xác, `checkConfig` trả mảng lỗi, chữ ký `compile` tạm đến T-R1-06).
 

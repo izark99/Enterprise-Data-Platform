@@ -45,7 +45,7 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | i18n | `i18next` · `react-i18next` | ^26.5.11 · ^16.2.0 |
 | Schemas | `zod` | ^4.1.12 |
 | Engine | `@duckdb/duckdb-wasm` · `apache-arrow` · `big.js` · `comlink` · `fflate` | 1.32.0 · 17.0.0 · ^7.0.1 · ^4.4.2 · 0.8.3 |
-| Excel | `xlsx` (SheetJS CE, vendored: `vendor/xlsx-0.20.3.tgz`, checksum in `vendor/README.md`) — read · `exceljs` — write | 0.20.3 · ^4.4.0 |
+| Excel | own streaming `.xlsx` reader on `fflate` · `xlsx` (SheetJS CE, vendored: `vendor/xlsx-0.20.3.tgz`, checksum in `vendor/README.md`) — number formats (`SSF`) and test oracle only, never reads a file (MEMORY 2026-11-16 09:26) · `exceljs` — write | — · 0.20.3 · ^4.4.0 |
 | Designer | `@xyflow/react` (React Flow) · `monaco-editor` | 12.12.0 · 0.57.0 |
 | Server client | `@supabase/supabase-js` | 2.118.0 |
 | Tests | `vitest` · `@playwright/test` · `@axe-core/playwright` | ^5.1.0 · 1.64.1 · ^4.14.0 |

@@ -23,20 +23,26 @@ describe('migrateFlowDefinition', () => {
     nodes: [{ id: 'a', type: 'input.excel', config: { slot: 'bang_luong' } }],
   };
 
-  it('removes .csv, replaces a csv-only accept and names each slot label', () => {
+  it('removes .csv and .xls, replaces an emptied accept and names each slot label', () => {
     const before: unknown = JSON.parse(JSON.stringify(raw));
     const { definition, notices } = migrateFlowDefinition(deepFreeze(raw));
     expect(notices).toEqual([
       { code: 'acceptCsvRemoved', slot: 'bang_luong', label: 'Bảng lương' },
       { code: 'acceptCsvOnlyReplaced', slot: 'cham_cong', label: 'Chấm công' },
+      { code: 'acceptXlsOnlyReplaced', slot: 'khac', label: 'Khác' },
     ]);
     const parsed = FlowDefinitionSchema.parse(definition);
-    expect(parsed.inputSlots.map((slot) => slot.accept)).toEqual([
-      ['.xlsx'],
-      ['.xlsx', '.xls'],
-      ['.xls'],
-    ]);
+    expect(parsed.inputSlots.map((slot) => slot.accept)).toEqual([['.xlsx'], ['.xlsx'], ['.xlsx']]);
     expect(raw).toEqual(before);
+  });
+
+  it('gives one notice per removed format, the last one OnlyReplaced when nothing is left', () => {
+    const slot = (accept: string[]) => ({ key: 's', label: 'S', accept });
+    const codes = (accept: string[]) =>
+      migrateFlowDefinition({ inputSlots: [slot(accept)] }).notices.map((n) => n.code);
+    expect(codes(['.xlsx', '.xls'])).toEqual(['acceptXlsRemoved']);
+    expect(codes(['.csv', '.xls'])).toEqual(['acceptCsvRemoved', 'acceptXlsOnlyReplaced']);
+    expect(codes(['.xlsx', '.XLS', '.csv'])).toEqual(['acceptCsvRemoved', 'acceptXlsRemoved']);
   });
 
   it('returns the same object and no notice when nothing changes', () => {

@@ -5,8 +5,8 @@ import { FileReadError, ZipArchive } from './zip';
  * Streaming `.xlsx` reader (spec §10, §13 "File rất lớn"). Only the parts a read needs are
  * inflated, chunk by chunk (`zip.ts`, with the AC-B4-90 limits), and the XML bytes are scanned
  * straight into a compact sparse grid: no sheet XML string, no object per cell. Cell values follow
- * SheetJS read with `dense`, `cellNF`, `cellText: false`, `cellDates: false` (`xls.ts` builds the
- * same grid from SheetJS), so validation sees the same values whichever reader made the grid.
+ * SheetJS read with `dense`, `cellNF`, `cellText: false`, `cellDates: false` (the tests build the
+ * same grid from SheetJS as the oracle). SheetJS itself is used only for number formats (`SSF`).
  *
  * Every failure is a `FileReadError` (`validation.fileTooLarge` / `validation.fileUnreadable`).
  */

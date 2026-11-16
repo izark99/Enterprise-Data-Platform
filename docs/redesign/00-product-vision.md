@@ -40,7 +40,7 @@ No third role. No self sign-up.
 
 ## In scope
 
-- Browser-only processing of `.xlsx` / `.xls`, up to ~1,000,000 rows × 30 columns per run.
+- Browser-only processing of `.xlsx` (not `.xls` / `.csv`, MEMORY 2026-11-16 09:26), up to ~1,000,000 rows × 30 columns per run.
 - Node types: `input.excel`, 8 transforms, `transform.formula` (41 Excel functions → SQL), `code.sql`, `control.compare`, `output.excel`, `output.preview`.
 - Flow and reference-table versioning by effective date; immutable published versions.
 - Admin screens: flows, versions, Designer, reference tables, users / groups / assignments, UI text overrides.

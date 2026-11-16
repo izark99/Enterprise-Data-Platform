@@ -161,7 +161,7 @@ Defaults and limits the spec does not write (learned from the previous implement
 | Flow | `params`, `inputSlots`, `edges` · `nodes` | `[]` · at least 1 |
 | Flow `ui` | `positions` · `notes` | `{}` · `[]` |
 | Param | `required` · `log` unset | `false` · logged by type: free-text `string` not logged, other types logged |
-| Slot | `required` · `accept` · `sheet` | `true` · `.xlsx, .xls` · `{ mode: 'byIndex', value: 0 }` (0-based) |
+| Slot | `required` · `accept` · `sheet` | `true` · `.xlsx` (the only format, MEMORY 2026-11-16 09:26) · `{ mode: 'byIndex', value: 0 }` (0-based) |
 | Slot | `headerRow` · `headerRows` · `dataStartRow` | `1` (1-based) · `1`, max 5 · `headerRow + headerRows`, never inside the header |
 | Slot | `unmergeCells` · `multiple` · `maxRows` | `'none'` (or `'fillDown'`) · `{ enabled: false, minFiles: 1, maxFiles: 50 }`, `minFiles <= maxFiles` · optional, warning above it |
 | Slot | `skipRows` | `{ whenBlank: key[] (≥ 1, slot columns), whenKeyContains: [] }`: a row whose `whenBlank` columns are all blank, or contain one of the texts (normalised), is skipped, not an error |
@@ -263,10 +263,24 @@ Used by `control.compare`, the slot rule `unique`, and (default on, Admin can sw
 | Header present, no data rows | warning |
 | Duplicate key within a slot (after normalisation), also across files of the slot | error on every file involved |
 | Row whose key cell holds a configured skip text (e.g. "TỔNG CỘNG") | skipped |
-| `.csv` | not accepted (only `.xlsx`, `.xls`) |
-| `.xls` holding HTML / XML (some HR system exports) | `validation.fileUnreadable`; only real OLE2 `.xls` is read, through SheetJS below 64 MiB (MEMORY 2026-11-16 08:52, 1A) |
+| `.csv`, `.xls` | not accepted: `validation.fileTypeNotAccepted`; only `.xlsx` (MEMORY 2026-11-16 09:26, owner 1B) |
+| Not a ZIP package (an OLE2 `.xls` renamed `.xlsx` included) | `validation.fileUnreadable`; SheetJS never reads a file (it only formats numbers, `SSF`) |
+| Stored flow listing `.csv` / `.xls` in `accept` | `migrateFlowDefinition` removes them with a notice (`accept{Csv,Xls}Removed`, the last of an emptied slot `…OnlyReplaced`); an emptied slot gets `.xlsx` |
 | Decompression | `fflate` `Inflate` only (streamed, bytes counted, early stop), never `DecompressionStream` (MEMORY 2026-11-16 08:52, 3A) |
 | Archive limits | 2 GiB per entry; ratio 1:200 for entries > 16 MiB; per-file budget |
+
+Reader rules (`apps/web/src/engine/io/`, T-R1-04; learned from `6fd5868` or chosen in T-R1-04, owner confirmed D-03-5):
+
+| Area | Rule |
+|------|------|
+| Zip limits | Declared sizes of every entry are checked when the archive opens; the per-file budget counts every read of every entry; more data than declared (declared 0 included, stored or deflated) → `fileTooLarge` |
+| Unreadable | Shared-string index out of range; a cell beyond row 1,048,576 or column XFD; ZIP64, encryption, multi-disk, unknown method, duplicate names, truncation, bad CRC |
+| SheetJS parity | Only the first `<t>` of a plain `<si>`; phonetic runs (`<rPh>`) left out; `<row/>` ignored; `t="str"` unescaped twice; empty `t="b"` = FALSE; unknown `t` = text; unknown error text = blank; `t="d"` ISO → serial; Excel 1900 leap-year bug kept; General numbers show 15 significant digits; a cell before the first row is skipped |
+| Merges | Header cells follow merges; a text repeated by a vertical merge is kept once; overlapping ranges resolved per column (the last range starting at or before the row wins) |
+| Headers, keys | Normalised: diacritics removed, đ → d, lowercase, single spaces. Missing key column = a `skipRows.whenBlank` column with `presence: 'required'`; skip rules apply only when every key column is found. Sheet `byName`: exact name, then normalised name |
+| Values | Default `dateFormats`: `dd/MM/yyyy`, `yyyy-MM-dd`, `excelSerial`. Boolean words: `co` / `dung` / `x` … true, `khong` / `sai` … false. Thousands groups have 3 digits; ambiguous = 1–3 digits, a separator, 3 digits |
+| Columns | `extraColumns: 'keep'` uses slug keys, `_2` … on a clash; a missing optional column reads blank; `_source_file` title = its key; `unique` messages keep the original values |
+| Report | No cap on the number of issues; a file's error count includes duplicates where it is the related file |
 
 ### 4.7 Run log content (data minimisation)
 
@@ -374,4 +388,5 @@ the Personal Data Protection Law in force from 2026 — verify the current text)
 | A-03-1 | ASSUMPTION | This document is complete enough to rebuild the schema; a gap found while writing the migrations is settled with the owner (`06-plan.md` Q-06-2). |
 | D-03-3 | DECISION (MEMORY 2026-11-16 07:55, 1A) | The §3 defaults the spec does not write (T-R1-02) repeat the previous implementation (read in git, written here); confirmed by the owner. |
 | D-03-4 | DECISION (MEMORY 2026-11-16 08:13, 3A) | Engine core rules of 4.9: learned from the previous implementation or chosen in T-R1-03; confirmed by the owner. |
+| D-03-5 | DECISION (MEMORY 2026-11-16 09:26, 2A) | The reader rules of 4.6: learned from the previous implementation or chosen in T-R1-04; confirmed by the owner. |
 | Q-03-1 | OPEN QUESTION | Who calls `purge_run_logs()` and how long `audit_logs` are kept (C-5) is not decided. Default until decided: nothing is purged automatically. |

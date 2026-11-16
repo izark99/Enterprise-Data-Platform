@@ -1,4 +1,4 @@
-import { InputSlotSchema, type InputSlot } from '@hrflow/flow-schema';
+import { InputSlotSchema, type InputSlot, migrateFlowDefinition } from '@hrflow/flow-schema';
 import { deflateSync, strToU8, zipSync } from 'fflate';
 import { crc32Update } from '../zip';
 
@@ -30,9 +30,9 @@ export function readFixture(name: string): Uint8Array {
 }
 
 export function fixtureSlot(key: 'bang_luong' | 'cham_cong'): InputSlot {
-  const flow = JSON.parse(new TextDecoder().decode(readFixture('flow.json'))) as {
-    inputSlots: { key: string }[];
-  };
+  // Through the migration, as the engine reads every stored flow (spec §8.1): it drops `.xls`.
+  const raw: unknown = JSON.parse(new TextDecoder().decode(readFixture('flow.json')));
+  const flow = migrateFlowDefinition(raw).definition as { inputSlots: { key: string }[] };
   return InputSlotSchema.parse(flow.inputSlots.find((s) => s.key === key));
 }
 

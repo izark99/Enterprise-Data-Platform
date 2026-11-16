@@ -3,11 +3,13 @@
  * release. A breaking change comes with a step here that rewrites an old definition in memory
  * (never the stored copy) before `FlowDefinitionSchema` parses it, and returns a notice per change.
  *
- * Steps: `.csv` is removed from `inputSlots[].accept` (MEMORY 2026-10-26 13:08); a slot that
- * accepted only `.csv` gets the default `.xlsx, .xls`.
+ * Steps: `.csv` (MEMORY 2026-10-26 13:08) and `.xls` (MEMORY 2026-11-16, owner 1B) are removed
+ * from `inputSlots[].accept`; a slot left with no format gets the default `.xlsx`. The last format
+ * removed from such a slot gets the `…OnlyReplaced` notice, the others `…Removed`.
  */
 
-export type FlowMigrationCode = 'acceptCsvRemoved' | 'acceptCsvOnlyReplaced';
+export type FlowMigrationCode =
+  'acceptCsvRemoved' | 'acceptCsvOnlyReplaced' | 'acceptXlsRemoved' | 'acceptXlsOnlyReplaced';
 
 export interface FlowMigrationNotice {
   code: FlowMigrationCode;
@@ -23,25 +25,36 @@ export interface FlowMigrationResult {
   notices: FlowMigrationNotice[];
 }
 
+const REMOVED_FORMATS = [
+  { ext: '.csv', removed: 'acceptCsvRemoved', onlyReplaced: 'acceptCsvOnlyReplaced' },
+  { ext: '.xls', removed: 'acceptXlsRemoved', onlyReplaced: 'acceptXlsOnlyReplaced' },
+] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isCsv(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().toLowerCase() === '.csv';
+function formatOf(value: unknown): string | undefined {
+  return typeof value === 'string' ? value.trim().toLowerCase() : undefined;
 }
 
 function migrateSlot(slot: unknown, index: number, notices: FlowMigrationNotice[]): unknown {
-  if (!isRecord(slot) || !Array.isArray(slot.accept) || !slot.accept.some(isCsv)) return slot;
+  if (!isRecord(slot) || !Array.isArray(slot.accept)) return slot;
+  const accept = slot.accept as unknown[];
+  const present = REMOVED_FORMATS.filter((f) => accept.some((v) => formatOf(v) === f.ext));
+  if (present.length === 0) return slot;
   const key = typeof slot.key === 'string' ? slot.key : String(index);
   const label = typeof slot.label === 'string' && slot.label.trim() ? slot.label.trim() : key;
-  const kept = (slot.accept as unknown[]).filter((value) => !isCsv(value));
-  if (kept.length > 0) {
-    notices.push({ code: 'acceptCsvRemoved', slot: key, label });
-    return { ...slot, accept: kept };
-  }
-  notices.push({ code: 'acceptCsvOnlyReplaced', slot: key, label });
-  return { ...slot, accept: ['.xlsx', '.xls'] };
+  const kept = accept.filter((v) => !present.some((f) => f.ext === formatOf(v)));
+  present.forEach((f, i) => {
+    const last = i === present.length - 1;
+    notices.push({
+      code: kept.length === 0 && last ? f.onlyReplaced : f.removed,
+      slot: key,
+      label,
+    });
+  });
+  return { ...slot, accept: kept.length > 0 ? kept : ['.xlsx'] };
 }
 
 export function migrateFlowDefinition(raw: unknown): FlowMigrationResult {

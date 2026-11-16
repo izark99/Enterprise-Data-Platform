@@ -12,7 +12,6 @@ import {
   slugifyHeader,
   type HeaderMapping,
 } from './headers';
-import { isOleFile, openXls } from './xls';
 import { isBlankRaw, openXlsx, type CellRead, type Grid, type WorkbookSource } from './xlsx-stream';
 import { FileReadError } from './zip';
 
@@ -90,13 +89,13 @@ const ZIP_SIGNATURES = [
 ];
 
 /**
- * Opens a workbook by its content (the extension was checked against `accept` before): a ZIP
- * package goes to the streaming reader, an OLE2 file to SheetJS. Throws `FileReadError` only.
+ * Opens a workbook by its content (the extension was checked against `accept` before): only a ZIP
+ * package (`.xlsx`) is read, by the streaming reader. Anything else, an OLE2 `.xls` renamed
+ * included, is unreadable (MEMORY 2026-11-16, owner 1B). Throws `FileReadError` only.
  */
 export function openWorkbook(bytes: Uint8Array): WorkbookSource {
   return guarded(() => {
     if (ZIP_SIGNATURES.some((sig) => sig.every((b, i) => bytes[i] === b))) return openXlsx(bytes);
-    if (isOleFile(bytes)) return openXls(bytes);
     throw new FileReadError('validation.fileUnreadable');
   });
 }

@@ -123,8 +123,8 @@ export const SheetSelectorSchema = z.discriminatedUnion('mode', [
 ]);
 export type SheetSelector = z.infer<typeof SheetSelectorSchema>;
 
-/** CSV is not accepted (MEMORY 2026-10-26 13:08). */
-export const SUPPORTED_FILE_TYPES = ['.xlsx', '.xls'] as const;
+/** Only `.xlsx`: no CSV (MEMORY 2026-10-26 13:08), no `.xls` (MEMORY 2026-11-16, owner 1B). */
+export const SUPPORTED_FILE_TYPES = ['.xlsx'] as const;
 
 export const InputSlotSchema = z
   .strictObject({

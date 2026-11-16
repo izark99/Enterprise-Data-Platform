@@ -17,7 +17,7 @@ describe('InputSlotSchema defaults', () => {
       key: 'bang_luong',
       label: 'Bảng lương',
       required: true,
-      accept: ['.xlsx', '.xls'],
+      accept: ['.xlsx'],
       sheet: { mode: 'byIndex', value: 0 },
       headerRow: 1,
       headerRows: 1,
@@ -109,8 +109,9 @@ describe('InputSlotSchema invariants', () => {
     ]);
   });
 
-  it('rejects .csv and an empty accept list', () => {
+  it('rejects .csv, .xls and an empty accept list', () => {
     expect(InputSlotSchema.safeParse({ ...slot, accept: ['.csv'] }).success).toBe(false);
+    expect(InputSlotSchema.safeParse({ ...slot, accept: ['.xls'] }).success).toBe(false);
     expect(InputSlotSchema.safeParse({ ...slot, accept: [] }).success).toBe(false);
   });
 });

@@ -28,6 +28,8 @@
 
 ## Flow & xử lý
 
+~~2026-10-26 13:08 - Không nhận file CSV: bỏ `.csv` khỏi danh sách định dạng nhận của input slot (chỉ .xlsx, .xls).~~ → thay bởi 2026-11-16 09:26
+
 ~~2026-11-06 08:24 - Designer: nối cạnh bằng bàn phím (vòng B của bộ khung UI/UX): chọn node → nút "Nối tới…" trên thanh công cụ (kèm phím tắt) mở danh sách cổng đích có tìm kiếm (Select tự làm), Enter để nối; thông báo cho trình đọc màn hình "Đã nối A → B"; nối bằng chuột giữ nguyên.~~ → thay bởi 2026-11-06 12:32
 
 ~~2026-11-04 15:34 - Designer: nối cạnh bằng bàn phím làm trong vòng B của bộ khung UI/UX (cách thao tác cụ thể chốt trước khi giao vòng B, spec Q27); bước 3 chỉ nối bằng chuột.~~ → thay bởi 2026-11-06 08:24
@@ -37,6 +39,8 @@
 ~~2026-10-29 21:18 - Designer: nối cạnh chỉ bằng chuột ở bước 3 (React Flow không hỗ trợ bàn phím); cách nối bằng bàn phím làm ở R4 nếu còn hạn mức.~~ → thay bởi 2026-11-04 15:34
 
 ## Kỹ thuật & tổ chức
+
+~~2026-11-16 08:52 - T-R1-04 (Harold trả lời 1A, 2A, 3A): (1) file `.xls` thực chất là HTML/XML (bản xuất của một số hệ thống HR) bị từ chối với `validation.fileUnreadable`; chỉ nhận `.xls` dạng OLE2 thật; (2) cột `string` hiển thị ngày dạng ngắn của Excel (`m/d/yy`) thành `dd/mm/yyyy`; (3) giải nén entry `.xlsx` chỉ dùng `fflate` (`Inflate`, theo luồng, đếm byte và dừng sớm) ở mọi nơi, không dùng `DecompressionStream`.~~ → thay bởi 2026-11-16 09:26
 
 ~~2026-10-30 23:29 - Giải nén entry .xlsx: đường đồng bộ dùng `fflate` (MIT, giải nén theo luồng, dừng sớm được) thay bộ giải mã DEFLATE tự viết; đường bất đồng bộ (worker) giữ bộ giải nén có sẵn của trình duyệt (`DecompressionStream`) kèm đếm byte và dừng sớm.~~ → thay bởi 2026-11-16 08:52
 

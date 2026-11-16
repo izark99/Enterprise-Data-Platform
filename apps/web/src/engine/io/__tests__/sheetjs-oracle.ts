@@ -1,19 +1,11 @@
-import * as XLSX from 'xlsx';
-import { ERROR_TEXTS, GridBuilder, type Grid, type WorkbookSource } from './xlsx-stream';
-import { FileReadError } from './zip';
+import type * as XLSX from 'xlsx';
+import { ERROR_TEXTS, GridBuilder, type Grid } from '../xlsx-stream';
 
 /**
- * `.xls` (BIFF in an OLE2 container) through SheetJS, only below 64 MiB (spec §13): SheetJS holds
- * the whole workbook in memory. ZIP packages never come here (`openXlsx`, no fallback).
+ * Test oracle: SheetJS reads a workbook and its cells are put in the same grid as the streaming
+ * reader builds, so `xlsx-stream.test.ts` compares the two cell by cell (AC f). Not app code: the
+ * app reads only `.xlsx`, through `openXlsx` (MEMORY 2026-11-16, owner 1B).
  */
-
-export const MAX_XLS_BYTES = 64 * 1024 * 1024;
-
-const OLE_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
-
-export function isOleFile(bytes: Uint8Array): boolean {
-  return OLE_SIGNATURE.every((b, i) => bytes[i] === b);
-}
 
 /** SheetJS options whose cell values the streaming reader reproduces. */
 export const SHEETJS_READ_OPTIONS: XLSX.ParsingOptions = {
@@ -64,25 +56,4 @@ export function gridFromWorksheet(ws: XLSX.WorkSheet): Grid {
   for (const m of ws['!merges'] ?? [])
     builder.merge({ r1: m.s.r, c1: m.s.c, r2: m.e.r, c2: m.e.c });
   return builder.finish();
-}
-
-/** Opens an `.xls` file. Throws `FileReadError`. */
-export function openXls(bytes: Uint8Array): WorkbookSource {
-  if (bytes.length >= MAX_XLS_BYTES) throw new FileReadError('validation.fileTooLarge');
-  if (!isOleFile(bytes)) throw new FileReadError('validation.fileUnreadable');
-  let wb: XLSX.WorkBook;
-  try {
-    wb = XLSX.read(bytes, SHEETJS_READ_OPTIONS);
-  } catch {
-    throw new FileReadError('validation.fileUnreadable');
-  }
-  return {
-    sheetNames: wb.SheetNames,
-    date1904: Boolean(wb.Workbook?.WBProps?.date1904),
-    readSheet(index) {
-      const ws = wb.Sheets[wb.SheetNames[index] ?? ''];
-      if (!ws) throw new FileReadError('validation.fileUnreadable');
-      return gridFromWorksheet(ws);
-    },
-  };
 }

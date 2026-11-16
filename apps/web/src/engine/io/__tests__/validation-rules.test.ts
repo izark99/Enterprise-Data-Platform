@@ -1,9 +1,19 @@
 import { InputSlotSchema, type InputSlotInput } from '@hrflow/flow-schema';
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { MAX_XLS_BYTES } from '../xls';
 import { readSlot, type SourceFile } from '../validation';
 import { rowXml, sheetXml, workbookParts, xlsxFrom } from './helpers';
+
+/** A valid BIFF8 `.xls` written by SheetJS (OLE2 container). */
+function biff8Workbook(): Uint8Array {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Mã NV', 'Số'],
+    ['NV1', 1.5],
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Data');
+  return new Uint8Array(XLSX.write(wb, { bookType: 'biff8', type: 'array' }) as ArrayBuffer);
+}
 
 function slot(input: Partial<InputSlotInput> = {}) {
   return InputSlotSchema.parse({
@@ -50,41 +60,27 @@ describe('readSlot: files and sheets', () => {
     expect(keys(readSlot(many, [f]))).toEqual(['validation.filesTooFew']);
   });
 
-  it('refuses .csv and other extensions, unreadable bytes, and .xls of 64 MiB or more', () => {
+  it('refuses .csv, .xls and other extensions, and unreadable bytes', () => {
     const csv = { name: 'a.csv', bytes: new TextEncoder().encode('Mã NV,Số\nA,1') };
     expect(readSlot(slot(), [csv]).report.issues[0]).toMatchObject({
       messageKey: 'validation.fileTypeNotAccepted',
-      params: { file: 'a.csv', accept: '.xlsx, .xls' },
+      params: { file: 'a.csv', accept: '.xlsx' },
+    });
+    const xls = { name: 'old.xls', bytes: biff8Workbook() };
+    expect(readSlot(slot(), [xls]).report.issues[0]).toMatchObject({
+      messageKey: 'validation.fileTypeNotAccepted',
+      params: { file: 'old.xls', accept: '.xlsx' },
     });
     const junk = { name: 'a.xlsx', bytes: new Uint8Array([1, 2, 3, 4, 5]) };
     expect(keys(readSlot(slot(), [junk]))).toEqual(['validation.fileUnreadable']);
-    const big = new Uint8Array(MAX_XLS_BYTES);
-    big.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
-    expect(keys(readSlot(slot(), [{ name: 'big.xls', bytes: big }]))).toEqual([
-      'validation.fileTooLarge',
-    ]);
   });
 
-  it('reads .xls through SheetJS with the same rules', () => {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['Mã NV', 'Số'],
-      ['NV1', 1.5],
-      ['TỔNG CỘNG', 1.5],
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Data');
-    const bytes = new Uint8Array(
-      XLSX.write(wb, { bookType: 'biff8', type: 'array' }) as ArrayBuffer,
-    );
-    const { table, report } = readSlot(slot(), [{ name: 'old.xls', bytes }]);
-    expect(report.errorCount).toBe(0);
-    expect(table.rowCount).toBe(1);
-    expect(String(table.get(0, 'so'))).toBe('1.5');
-    expect(report.skippedRows[0]).toMatchObject({
-      row: 3,
-      messageKey: 'skipped.keyContains',
-      params: { text: 'TỔNG CỘNG' },
-    });
+  it('refuses a real .xls renamed .xlsx: only ZIP packages are read (owner 1B)', () => {
+    const renamed = { name: 'old.xlsx', bytes: biff8Workbook() };
+    expect([0xd0, 0xcf, 0x11, 0xe0].every((b, i) => renamed.bytes[i] === b)).toBe(true);
+    const result = readSlot(slot(), [renamed]);
+    expect(keys(result)).toEqual(['validation.fileUnreadable']);
+    expect(result.table.rowCount).toBe(0);
   });
 
   it('selects sheets by name (exact, then normalised), by index and by matching headers', () => {
