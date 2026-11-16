@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { NODE_PLUGINS } from '../nodes/index';
 
 describe('node registry', () => {
-  it('is empty until node tasks register plugins', () => {
-    expect(Object.keys(NODE_PLUGINS)).toEqual([]);
+  it('registers the plugins of the acceptance flow under their type', () => {
+    expect(Object.keys(NODE_PLUGINS)).toEqual(['input.excel', 'control.compare', 'output.excel']);
+    for (const [type, plugin] of Object.entries(NODE_PLUGINS)) expect(plugin.type).toBe(type);
   });
 });

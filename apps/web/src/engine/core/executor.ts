@@ -1,4 +1,5 @@
 import type { FlowDefinition } from '@hrflow/flow-schema';
+import type { RunContext, Translate } from '../nodes/index';
 import { EngineError, isEngineError } from './errors';
 import { perfMeasure, perfStart } from './perf';
 import type { PlannedNode } from './planner';
@@ -29,6 +30,10 @@ export type RunProgressEvent =
 
 export interface ExecuteOptions {
   readonly onProgress?: (event: RunProgressEvent) => void;
+  /** Slots, parameters and file sink of the run, passed to every node (03 §4.9). */
+  readonly run?: RunContext;
+  /** Translator of output titles, passed to every node (03 §4.9). */
+  readonly t?: Translate;
 }
 
 export interface ExecuteResult {
@@ -83,7 +88,12 @@ export async function executePlan(
           // `compile` plugins run in the DuckDB runtime, which this executor does not drive yet.
           throw new EngineError('executor.error.nodeFailed', { node: node.label ?? node.id });
         }
-        produced = await plugin.execute(step.config, inputs, { nodeId: node.id, flow });
+        produced = await plugin.execute(step.config, inputs, {
+          nodeId: node.id,
+          flow,
+          t: options.t,
+          run: options.run,
+        });
       } catch (err) {
         // A non-engine error may carry data in its message: only the node is reported.
         throw isEngineError(err)
