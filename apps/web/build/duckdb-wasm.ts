@@ -2,11 +2,14 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Plugin, ResolvedConfig } from 'vite';
 import {
+  JSON_EXTENSION_NAME,
   MANIFEST_FILE,
   MAX_DEPLOY_FILE_BYTES,
   WASM_PART_BYTES,
+  type DuckDbExtensionFile,
   type DuckDbManifest,
 } from '../src/engine/duckdb/manifest.ts';
 
@@ -17,6 +20,12 @@ import {
  * The same manifest is embedded in the engine through the `__HRFLOW_DUCKDB_MANIFEST__` define, so
  * the worker checks the parts of its own build. Part paths carry the version and the checksum, so
  * the parts of two builds never mix. `vite dev` serves the parts from memory.
+ *
+ * The vendored DuckDB `json` extension (`vendor/README.md`, MEMORY 2026-11-16 14:30) is copied
+ * next to the parts as `duckdb/<version>-<checksum>/json.duckdb_extension.wasm` (DuckDB derives the
+ * extension name from the file name) and embedded as `__HRFLOW_DUCKDB_JSON_EXTENSION__`; the build
+ * (and `vite dev`) fails when its SHA-256 is not `JSON_EXTENSION_SHA256` (owner 2A: checked at build
+ * time; at run time DuckDB checks the extension's signature).
  *
  * After the build every file of the output directory must be below 25 MiB, else the build fails.
  */
@@ -29,6 +38,20 @@ interface Split {
 }
 
 let cached: Split | undefined;
+
+/** `vendor/duckdb-json-1.4.3-wasm_eh.duckdb_extension.wasm` (checksum of `vendor/README.md`). */
+const JSON_EXTENSION_VENDOR_FILE = fileURLToPath(
+  new URL('../../../vendor/duckdb-json-1.4.3-wasm_eh.duckdb_extension.wasm', import.meta.url),
+);
+export const JSON_EXTENSION_SHA256 =
+  'b997276c8e15cc3ebdeda340d73d15dc1c4f4755ad281280451cb0a2f79302e9';
+
+interface Extension {
+  readonly entry: DuckDbExtensionFile;
+  readonly data: Buffer;
+}
+
+let cachedExtension: Extension | undefined;
 
 const sha256 = (data: Buffer): string => createHash('sha256').update(data).digest('hex');
 
@@ -59,6 +82,24 @@ export function splitDuckDbWasm(): Split {
     parts,
   };
   return cached;
+}
+
+/** The vendored `json` extension at its served path; throws when its SHA-256 is not the pinned one. */
+export function jsonExtension(): Extension {
+  if (cachedExtension) return cachedExtension;
+  const data = readFileSync(JSON_EXTENSION_VENDOR_FILE);
+  const digest = sha256(data);
+  if (digest !== JSON_EXTENSION_SHA256) {
+    throw new Error(
+      `vendor/: the DuckDB json extension has SHA-256 ${digest}, expected ${JSON_EXTENSION_SHA256}`,
+    );
+  }
+  const dir = dirname(splitDuckDbWasm().parts[0]!.file);
+  cachedExtension = {
+    entry: { file: `${dir}/${JSON_EXTENSION_NAME}`, bytes: data.length, sha256: digest },
+    data,
+  };
+  return cachedExtension;
 }
 
 function listFiles(dir: string): string[] {
@@ -108,7 +149,10 @@ function duckDbAssets(): Plugin {
     name: 'hrflow:duckdb-wasm',
     config() {
       return {
-        define: { __HRFLOW_DUCKDB_MANIFEST__: JSON.stringify(splitDuckDbWasm().manifest) },
+        define: {
+          __HRFLOW_DUCKDB_MANIFEST__: JSON.stringify(splitDuckDbWasm().manifest),
+          __HRFLOW_DUCKDB_JSON_EXTENSION__: JSON.stringify(jsonExtension().entry),
+        },
       };
     },
     configResolved(resolved) {
@@ -124,6 +168,12 @@ function duckDbAssets(): Plugin {
           res.end(JSON.stringify(split.manifest));
           return;
         }
+        const ext = jsonExtension();
+        if (path === ext.entry.file) {
+          res.setHeader('Content-Type', 'application/wasm');
+          res.end(ext.data);
+          return;
+        }
         const part = split.parts.find((p) => p.file === path);
         if (!part) return next();
         res.setHeader('Content-Type', 'application/octet-stream');
@@ -135,6 +185,8 @@ function duckDbAssets(): Plugin {
       for (const part of split.parts) {
         this.emitFile({ type: 'asset', fileName: part.file, source: part.data });
       }
+      const ext = jsonExtension();
+      this.emitFile({ type: 'asset', fileName: ext.entry.file, source: ext.data });
       this.emitFile({
         type: 'asset',
         fileName: MANIFEST_FILE,

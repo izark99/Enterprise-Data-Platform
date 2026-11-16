@@ -8,6 +8,7 @@ import {
   type SqlCountWarning,
   type SqlDialect,
   type SqlInput,
+  type SqlInspector,
   type SqlQuery,
   type Translate,
 } from '../nodes/index';
@@ -68,6 +69,8 @@ export interface SqlOwner {
 /** What the executor needs from DuckDB (implemented by `engine/duckdb/scope.ts`). */
 export interface SqlRuntime {
   readonly dialect: SqlDialect;
+  /** DuckDB's parser and `DESCRIBE`, given to `compile` (`code.sql`). */
+  readonly inspector: SqlInspector;
   upload(table: Table, node: string): SqlRelation;
   input(rel: SqlRelation): SqlInput;
   /** A lazy relation: `query` over `inputs`, owned by the node that compiled it. */
@@ -237,7 +240,11 @@ export async function executePlan(
             inputs[port] = sql.input(rels[port]);
           }
           const relList = Object.values(rels);
-          const compiled = plugin.compile!(step.config, inputs, { ...ctx, sql: sql.dialect });
+          const compiled = plugin.compile!(step.config, inputs, {
+            ...ctx,
+            sql: sql.dialect,
+            inspect: sql.inspector,
+          });
           const sqlStart = perfStart();
           for (const w of compiled.warnings ?? []) {
             const count = sql.count(relList, w, label);

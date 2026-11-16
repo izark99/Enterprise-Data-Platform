@@ -1,7 +1,7 @@
 import { createDuckDB, DEFAULT_RUNTIME, VoidLogger } from '@duckdb/duckdb-wasm/blocking';
 import { EngineError } from '../core/errors';
 import { DuckDb } from './db';
-import { isDuckDbManifest, type DuckDbManifest } from './manifest';
+import { isDuckDbExtensionFile, isDuckDbManifest, type DuckDbManifest } from './manifest';
 
 /**
  * Loads the self-hosted DuckDB-WASM in the engine worker (spec §13.1):
@@ -11,13 +11,18 @@ import { isDuckDbManifest, type DuckDbManifest } from './manifest';
  *   other versions are removed; the cache holds only the WASM, never data;
  * - a bad checksum or a failed download clears the cache and loads once more from the network;
  *   a second failure is `duckdb.error.loadFailed`;
- * - the verified module reaches DuckDB as a local `blob:` URL, revoked once DuckDB has started.
+ * - the verified module reaches DuckDB as a local `blob:` URL, revoked once DuckDB has started;
+ * - the `json` extension (DuckDB's parser for the `code.sql` guard) is always loaded from its
+ *   same-origin path before the configuration is locked (db.ts); DuckDB fetches it itself and
+ *   checks its signature, the build checked its SHA-256 (owner 2A, MEMORY 2026-11-16 14:30).
  *
  * Only a flow with a DuckDB node calls `loadDuckDb` (lazy load, spec §13.1).
  */
 
 /** The manifest of this build, embedded by the Vite plugin (`apps/web/build/duckdb-wasm.ts`). */
 declare const __HRFLOW_DUCKDB_MANIFEST__: unknown;
+/** The `json` extension entry of this build (`DuckDbExtensionFile`), embedded by the same plugin. */
+declare const __HRFLOW_DUCKDB_JSON_EXTENSION__: unknown;
 
 export const CACHE_PREFIX = 'hrflow-duckdb-';
 
@@ -178,12 +183,24 @@ async function open(onProgress?: (p: LoadProgress) => void): Promise<DuckDb> {
   const manifest =
     typeof __HRFLOW_DUCKDB_MANIFEST__ === 'undefined' ? undefined : __HRFLOW_DUCKDB_MANIFEST__;
   if (!isDuckDbManifest(manifest)) throw new EngineError('duckdb.error.loadFailed');
+  const extension =
+    typeof __HRFLOW_DUCKDB_JSON_EXTENSION__ === 'undefined'
+      ? undefined
+      : __HRFLOW_DUCKDB_JSON_EXTENSION__;
+  if (!isDuckDbExtensionFile(extension)) throw new EngineError('duckdb.error.loadFailed');
+  const baseUrl = new URL(import.meta.env.BASE_URL, self.location.origin).href;
+  let jsonExtensionUrl: string;
+  try {
+    jsonExtensionUrl = partUrl(extension.file, baseUrl);
+  } catch {
+    throw new EngineError('duckdb.error.loadFailed');
+  }
   const bytes = await loadWasmBytes(
     manifest,
     {
       fetch: (url, init) => fetch(url, init),
       caches: typeof caches === 'undefined' ? undefined : caches,
-      baseUrl: new URL(import.meta.env.BASE_URL, self.location.origin).href,
+      baseUrl,
     },
     onProgress,
   );
@@ -200,7 +217,7 @@ async function open(onProgress?: (p: LoadProgress) => void): Promise<DuckDb> {
         bindings.instantiate(() => undefined),
         INSTANTIATE_TIMEOUT_MS,
       );
-      return new DuckDb(bindings);
+      return new DuckDb(bindings, { jsonExtensionUrl });
     });
   } catch {
     throw new EngineError('duckdb.error.loadFailed');

@@ -3,6 +3,7 @@ import type { EngineError, ErrorVars } from '../core/errors';
 import type { Table } from '../core/table';
 import type { PortDef, Schema } from '../core/types';
 import type { SlotReadResult } from '../io/validation';
+import { codeSqlPlugin } from './code-sql';
 import { controlComparePlugin } from './control-compare';
 import { inputExcelPlugin } from './input-excel';
 import { outputExcelPlugin } from './output-excel';
@@ -71,6 +72,14 @@ export interface NodeWarning {
 export interface DesignContext {
   readonly flow: FlowDefinition;
   readonly t?: Translate;
+  /**
+   * DuckDB parser and `DESCRIBE` for nodes whose schema needs them (`code.sql`, spec §13.2), given
+   * by the Designer worker once DuckDB is loaded. Absent → such a node reports
+   * `duckdb.error.unavailable` ("Đang xác định cột…").
+   */
+  readonly sql?: SqlInspector;
+  /** Design-time warning of the node being inferred (e.g. `sql.warning.doubleColumn`). */
+  readonly warn?: (warning: NodeWarning) => void;
 }
 
 /** What `output.preview` keeps for the Result screen (spec §12.1.10); it never leaves the worker. */
@@ -121,6 +130,47 @@ export interface SqlDialect {
   readonly param: string;
 }
 
+/** What `SqlInspector.check` found in an Admin SQL statement (spec §9.2). */
+export interface SqlChecked {
+  /** The statement with every `$key` replaced by a `VARCHAR` placeholder (values are bound). */
+  readonly sql: string;
+  /** Parameter key of each placeholder, in text order. */
+  readonly paramKeys: readonly string[];
+  /** Whether the outermost query has an `ORDER BY` (else `sql.warning.noOrderBy`). */
+  readonly ordered: boolean;
+}
+
+/** A result column of an Admin SQL statement, as DuckDB `DESCRIBE` reports it. */
+export interface SqlDescribed {
+  readonly name: string;
+  /** DuckDB type name, e.g. `DOUBLE`, `DECIMAL(18,3)`. */
+  readonly duckType: string;
+  /** Engine type (spec §9.4), `null` when the engine has none (`sql.error.unsupportedType`). */
+  readonly type: DataType | null;
+  /** `DOUBLE` / `FLOAT`: read with 15 significant digits (`sql.warning.doubleColumn`). */
+  readonly double: boolean;
+}
+
+/** A view of an Admin SQL statement: an input port and its columns (no hidden order column). */
+export interface SqlView {
+  readonly name: string;
+  readonly columns: Schema;
+}
+
+/**
+ * DuckDB's parser and `DESCRIBE` for `code.sql` (spec §9.2, §12.1.8), implemented in
+ * `engine/duckdb/sql-guard.ts`; nodes never import DuckDB code. Every method throws an
+ * `EngineError` (`sql.error.*`) without a node: the caller attaches it.
+ */
+export interface SqlInspector {
+  /** One `SELECT` / `WITH … SELECT` reading only `views` and its own CTEs, with known params. */
+  check(sql: string, views: readonly string[], params: readonly string[]): SqlChecked;
+  /** Result columns of a checked statement over empty views of these columns. */
+  describe(checked: SqlChecked, views: readonly SqlView[]): readonly SqlDescribed[];
+  /** SQL turning `expr` (a column of type `column.duckType`) into its canonical engine type. */
+  canonical(expr: string, column: SqlDescribed, key: string): string;
+}
+
 /** An input port of a compiled node: the relation to read (already quoted) and its columns. */
 export interface SqlInput {
   readonly ref: string;
@@ -138,6 +188,11 @@ export interface SqlQuery {
   readonly params: readonly SqlValue[];
   readonly columns: Schema;
   readonly finish?: (table: Table) => Table;
+  /**
+   * Error key of a DuckDB failure in this query (default `duckdb.error.queryFailed`), e.g.
+   * `sql.error.runtime` for Admin SQL; DuckDB's own text then becomes the screen-only `detail`.
+   */
+  readonly runtimeErrorKey?: string;
 }
 
 /** A count query run with the node; a count above zero becomes the warning `{ count }`. */
@@ -154,6 +209,8 @@ export interface SqlCompiled {
 
 export interface CompileContext extends ExecuteContext {
   readonly sql: SqlDialect;
+  /** DuckDB's parser and `DESCRIBE` (`code.sql`). */
+  readonly inspect: SqlInspector;
 }
 
 export interface NodePlugin<Config = unknown> {
@@ -228,4 +285,5 @@ export const NODE_PLUGINS: NodeRegistry = {
   [transformUnionPlugin.type]: transformUnionPlugin,
   [transformGroupByPlugin.type]: transformGroupByPlugin,
   [transformDedupePlugin.type]: transformDedupePlugin,
+  [codeSqlPlugin.type]: codeSqlPlugin,
 };

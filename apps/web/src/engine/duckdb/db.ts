@@ -21,16 +21,34 @@ export const SECURE_SETTINGS: readonly string[] = [
 
 type Connection = ReturnType<DuckDBBindings['connect']>;
 
+export interface DuckDbOptions {
+  /**
+   * Absolute same-origin URL of the `json` extension (DuckDB's parser for the `code.sql` guard,
+   * 02 §1.1), loaded before the settings are locked; DuckDB fetches it and checks its signature.
+   * The worker always passes it (loader.ts). `null` only where the extension cannot load (Vitest
+   * under Node): then `parser` is false and the guard refuses with `duckdb.error.unavailable`.
+   */
+  readonly jsonExtensionUrl: string | null;
+}
+
 export class DuckDb {
   private readonly conn: Connection;
+  /** The `json` extension is loaded (`json_serialize_sql` is available). */
+  readonly parser: boolean;
 
-  /** Opens `:memory:` (no OPFS, no file), applies and locks the settings, creates the macros. */
-  constructor(bindings: DuckDBBindings) {
+  /**
+   * Opens `:memory:` (no OPFS, no file), loads the `json` extension when given, then applies and
+   * locks the settings (afterwards no extension can load) and creates the macros.
+   */
+  constructor(bindings: DuckDBBindings, options: DuckDbOptions) {
     bindings.open({
       path: ':memory:',
       query: { castBigIntToDouble: false, castDecimalToDouble: false },
     });
     this.conn = bindings.connect();
+    const url = options.jsonExtensionUrl;
+    if (url !== null) this.exec(`LOAD '${url.replaceAll("'", "''")}'`);
+    this.parser = url !== null;
     for (const sql of SECURE_SETTINGS) this.exec(sql);
     for (const sql of ENGINE_MACROS) this.exec(sql);
   }

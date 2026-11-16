@@ -27,6 +27,21 @@ export const WASM_PART_BYTES = 20 * 1024 * 1024;
 /** Path of the manifest in `dist/`, relative to the app base URL. */
 export const MANIFEST_FILE = 'duckdb/duckdb-manifest.json';
 
+/**
+ * A DuckDB extension copied same-origin next to the parts (the `json` extension, spec §13.1, 02
+ * §1.1). Embedded by the build plugin as `__HRFLOW_DUCKDB_JSON_EXTENSION__`; DuckDB fetches it
+ * itself with `LOAD '<url>'` and checks its signature, the build checks `sha256`.
+ */
+export interface DuckDbExtensionFile {
+  /** Path relative to the app base URL, ending in `/json.duckdb_extension.wasm`. */
+  readonly file: string;
+  readonly bytes: number;
+  readonly sha256: string;
+}
+
+/** Served name of the `json` extension: DuckDB derives the extension name from it. */
+export const JSON_EXTENSION_NAME = 'json.duckdb_extension.wasm';
+
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 /** Same-origin relative path under `duckdb/`: no scheme, no `..`, no leading slash. */
 const PART_FILE = /^duckdb\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
@@ -54,4 +69,15 @@ export function isDuckDbManifest(value: unknown): value is DuckDbManifest {
     sum += part['bytes'];
   }
   return sum === m['totalBytes'];
+}
+
+/** Checks the shape of the embedded `json` extension entry (same-origin path under `duckdb/`). */
+export function isDuckDbExtensionFile(value: unknown): value is DuckDbExtensionFile {
+  if (typeof value !== 'object' || value === null) return false;
+  const e = value as Record<string, unknown>;
+  if (typeof e['file'] !== 'string' || !PART_FILE.test(e['file'])) return false;
+  if (!e['file'].endsWith(`/${JSON_EXTENSION_NAME}`)) return false;
+  if (e['file'].split('/').includes('..')) return false;
+  if (!isByteCount(e['bytes']) || e['bytes'] >= MAX_DEPLOY_FILE_BYTES) return false;
+  return typeof e['sha256'] === 'string' && SHA256_HEX.test(e['sha256']);
 }

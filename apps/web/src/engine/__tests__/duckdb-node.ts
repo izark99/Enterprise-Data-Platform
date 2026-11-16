@@ -4,7 +4,8 @@ import { DuckDb } from '../duckdb/db';
 /**
  * DuckDB for Vitest: the same package, the same `duckdb-eh.wasm` and the same runtime without file
  * system or network (`DEFAULT_RUNTIME`) as the worker (loader.ts), through the Node blocking
- * bindings. One instance per test file.
+ * bindings. One instance per test file. Without the `json` extension: Node cannot load it (the
+ * `LOAD` hangs), so tests that need DuckDB's parser run in Chromium (`e2e/engine/code-sql.spec.ts`).
  */
 interface NodeModule {
   createRequire(url: string): { resolve(id: string): string };
@@ -29,7 +30,7 @@ export function nodeDuckDb(): Promise<DuckDb> {
       DEFAULT_RUNTIME,
     );
     await bindings.instantiate(() => undefined);
-    return new DuckDb(bindings);
+    return new DuckDb(bindings, { jsonExtensionUrl: null });
   })();
   return pending;
 }

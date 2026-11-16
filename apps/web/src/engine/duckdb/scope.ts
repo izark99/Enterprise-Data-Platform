@@ -4,10 +4,18 @@ import { EngineError } from '../core/errors';
 import type { SqlOwner, SqlRelation, SqlRuntime } from '../core/executor';
 import type { Table } from '../core/table';
 import type { Schema } from '../core/types';
-import type { SqlCountWarning, SqlDialect, SqlInput, SqlQuery, SqlValue } from '../nodes/index';
+import type {
+  SqlCountWarning,
+  SqlDialect,
+  SqlInput,
+  SqlInspector,
+  SqlQuery,
+  SqlValue,
+} from '../nodes/index';
 import { readTable, uploadTable } from './arrow-io';
 import type { DuckDb } from './db';
 import { loadDuckDb, type LoadProgress } from './loader';
+import { DuckDbInspector } from './sql-guard';
 import { DUCKDB_TYPE, normKeySql, ORD_SQL, quoteIdent, toEngineError } from './sql';
 
 /**
@@ -21,7 +29,8 @@ import { DUCKDB_TYPE, normKeySql, ORD_SQL, quoteIdent, toEngineError } from './s
  * - Tables are reference-counted by the relations that read them and dropped at zero; `dispose`
  *   drops everything this scope created.
  *
- * Values are bound only as prepared parameters; DuckDB's text never reaches an `EngineError`.
+ * Values are bound only as prepared parameters; DuckDB's text never becomes an error param (only
+ * the screen-only `detail` of a query with `runtimeErrorKey`, e.g. `code.sql`).
  */
 
 interface Cte {
@@ -31,6 +40,8 @@ interface Cte {
   readonly columns: Schema;
   /** Node whose query this is (a failure found by probing is reported at it). */
   readonly owner: SqlOwner;
+  /** Error key of a failure of this query (`SqlQuery.runtimeErrorKey`). */
+  readonly runtimeErrorKey?: string;
 }
 
 class Rel implements SqlRelation {
@@ -91,10 +102,13 @@ let counter = 0;
 
 export class SqlScope implements SqlRuntime {
   readonly dialect = DUCKDB_DIALECT;
+  readonly inspector: SqlInspector;
   private readonly refs = new Map<string, number>();
   private readonly created = new Set<string>();
 
-  constructor(private readonly db: DuckDb) {}
+  constructor(private readonly db: DuckDb) {
+    this.inspector = new DuckDbInspector(db);
+  }
 
   private rel(value: SqlRelation): Rel {
     if (!(value instanceof Rel)) throw new TypeError('SqlScope: foreign relation');
@@ -153,6 +167,7 @@ export class SqlScope implements SqlRuntime {
       params: query.params,
       columns: query.columns,
       owner,
+      ...(query.runtimeErrorKey === undefined ? {} : { runtimeErrorKey: query.runtimeErrorKey }),
     };
     const bases = [...new Set(rels.flatMap((r) => r.bases))];
     return new Rel(query.columns, cte.name, [...mergeCtes(rels), cte], null, bases);
@@ -171,7 +186,7 @@ export class SqlScope implements SqlRuntime {
       try {
         this.db.query(`${w.sql}SELECT ${counts.join(', ')} FROM ${cte.name}`, w.params);
       } catch (err) {
-        const found = toEngineError(err, cte.owner.label);
+        const found = toEngineError(err, cte.owner.label, cte.runtimeErrorKey);
         if (found instanceof EngineError) return found.atNode(cte.owner.id);
         return found;
       }

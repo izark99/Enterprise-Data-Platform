@@ -171,14 +171,30 @@ export class DuckDbError extends Error {
   }
 }
 
+/** Markers raised with DuckDB `error()` by generated SQL (`sql-guard.ts`), naming a column key. */
+const NOT_FINITE_MARKER = /hr\$notfinite:([a-z_][a-z0-9_]*)/;
+const OVERFLOW_MARKER = /hr\$overflow:([a-z_][a-z0-9_]*)/;
+
 /**
- * DuckDB failure → engine error without DuckDB's text (it may hold data). Only an out-of-range
- * decimal is told apart (`duckdb.error.decimalOverflow`), because the Admin can act on it.
+ * DuckDB failure → engine error. DuckDB's text (it may hold data) never becomes a param: our own
+ * markers become `sql.error.notFinite` / `duckdb.error.decimalOverflow` with the column, an
+ * out-of-range number becomes `duckdb.error.decimalOverflow`, and anything else
+ * `duckdb.error.queryFailed`, or `runtimeKey` (e.g. `sql.error.runtime` of `code.sql`) with
+ * DuckDB's text as the screen-only `detail` (spec §12.1.8, owner 2A).
  */
-export function toEngineError(err: unknown, node?: string): Error {
+export function toEngineError(err: unknown, node?: string, runtimeKey?: string): Error {
   if (err instanceof EngineError) return err;
   if (err instanceof DuckDbError) {
+    const notFinite = NOT_FINITE_MARKER.exec(err.message);
+    if (notFinite) {
+      return new EngineError('sql.error.notFinite', withNode({ column: notFinite[1]! }, node));
+    }
+    const overflow = OVERFLOW_MARKER.exec(err.message);
+    if (overflow) return decimalOverflow(overflow[1]!, node);
     if (/Out of Range Error|overflow/i.test(err.message)) return decimalOverflow(undefined, node);
+    if (runtimeKey !== undefined) {
+      return new EngineError(runtimeKey, withNode({}, node), { detail: err.message });
+    }
     return new EngineError('duckdb.error.queryFailed', withNode({}, node));
   }
   return err instanceof Error ? err : new Error('DuckDB: unexpected failure');
