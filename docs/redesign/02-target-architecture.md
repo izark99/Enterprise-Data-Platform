@@ -44,7 +44,7 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Routing, tables | `@tanstack/react-router` · `@tanstack/react-table` · `@tanstack/react-virtual` | ^1.170.46 · ^8.21.3 · ^3.14.26 |
 | i18n | `i18next` · `react-i18next` | ^26.5.11 · ^16.2.0 |
 | Schemas | `zod` | ^4.1.12 |
-| Engine | `@duckdb/duckdb-wasm` · `apache-arrow` · `big.js` · `comlink` · `fflate` | 1.32.0 · 17.0.0 · ^7.0.1 · ^4.4.2 · 0.8.3 |
+| Engine | `@duckdb/duckdb-wasm` · `apache-arrow` · `big.js` · `comlink` · `fflate` · DuckDB `json` extension (vendored: `vendor/duckdb-json-1.4.3-wasm_eh.duckdb_extension.wasm`, checksum in `vendor/README.md`; MEMORY 2026-11-16 14:30) | 1.32.0 · 17.0.0 · ^7.0.1 · ^4.4.2 · 0.8.3 · DuckDB v1.4.3 |
 | Excel | own streaming `.xlsx` reader on `fflate` · `xlsx` (SheetJS CE, vendored: `vendor/xlsx-0.20.3.tgz`, checksum in `vendor/README.md`) — number formats (`SSF`) and test oracle only, never reads a file (MEMORY 2026-11-16 09:26) · `exceljs` — write | — · 0.20.3 · ^4.4.0 |
 | Designer | `@xyflow/react` (React Flow) · `monaco-editor` | 12.12.0 · 0.57.0 |
 | Server client | `@supabase/supabase-js` | 2.118.0 |
@@ -53,6 +53,8 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Types (dev only) | `@types/react` · `@types/react-dom` · `@types/big.js` · `@types/node` | ^19.2.0 · ^19.2.0 · ^7.0.0 · ^22.18.0 |
 | Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
 | Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
+
+The DuckDB `json` extension (MEMORY 2026-11-16 14:30, T-R1-08 owner 1A 1B 2A 3A): the `eh` bundle links only `core_functions`, and `json_serialize_sql` (DuckDB's parser, needed by the `code.sql` guard) lives in `json`. It is copied same-origin to `dist/` by the DuckDB build plugin, which fails the build when its SHA-256 differs from `vendor/README.md`, and loaded with `LOAD '<origin>/…/json.duckdb_extension.wasm'` right after the database opens and before the four lock settings (spec §13.1); afterwards no extension can load. DuckDB fetches it itself (a `blob:` URL is refused: the extension name comes from the file name) and checks its signature (`allow_unsigned_extensions` stays off); there is no run-time SHA-256 check (2A). It is always loaded with DuckDB (+820,646 bytes on first use). Node cannot load it, so tests that need DuckDB's parser run in Chromium on the E2E harness page (3A).
 
 `exceljs` 4.4.0 brings 176 transitive packages (155 MIT, 12 ISC, Apache-2.0, BSD-3-Clause, …); `buffers@0.1.1` declares no licence — accepted (MEMORY 2026-11-16 12:41, 4A).
 
