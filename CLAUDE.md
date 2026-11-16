@@ -41,7 +41,7 @@ Also stop and ask when: start-up JS would exceed 240 KiB gzip; a check fails twi
 ## Working with the owner
 
 - Talk to him in Vietnamese, keeping English technical terms. Conclusion first, then reasons. Minimal formatting.
-- Questions are numbered, each with 2–3 options A/B/C, one marked recommended with a one-line trade-off. He answers like "1A, 2B".
+- Questions are numbered, each with 2–3 options A/B/C, one marked recommended with a one-line trade-off. He answers like "1A, 2B". A question that asks him to review or confirm a document puts the content in the message (or the exact path and section) so he can read it at once.
 - Risky matters (data, security, cost): give the facts and the options; he decides.
 
 ## Decisions
