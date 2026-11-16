@@ -23,6 +23,10 @@ import { DUCKDB_TYPE, DuckDbError, quoteIdent, readKindOf } from './sql';
  */
 
 const PLACEHOLDER = 'CAST(? AS VARCHAR)';
+/** Deepest `/* … *\/` nesting accepted (the parser is quadratic in it). */
+const MAX_COMMENT_DEPTH = 32;
+/** DuckDB's refusal of a statement that is not a query (`json_serialize_sql`). */
+const NOT_SELECT = /^(Only SELECT statements|A CTE needs a SELECT)/;
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -44,26 +48,34 @@ function isObject(v: Json | undefined): v is JsonObject {
 const fail = (key: string, params: Record<string, string> = {}, detail?: string): EngineError =>
   new EngineError(key, params, { path: ['sql'], ...(detail === undefined ? {} : { detail }) });
 
-/** Every CTE name defined anywhere in the statement (they may be read by the statement). */
-function cteNames(value: Json, out: Set<string>): void {
-  if (Array.isArray(value)) {
-    for (const v of value) cteNames(v, out);
-    return;
+/** Names of the CTEs of one query node, in declaration order, with their query and recursion. */
+function ctesOf(node: JsonObject): { name: string; query: Json; recursive: boolean }[] {
+  const map = node['cte_map'];
+  if (!isObject(map) || !Array.isArray(map['map'])) return [];
+  const out: { name: string; query: Json; recursive: boolean }[] = [];
+  for (const entry of map['map']) {
+    if (!isObject(entry) || typeof entry['key'] !== 'string') continue;
+    const value = entry['value'];
+    const query = isObject(value) ? (value['query'] ?? null) : null;
+    const inner = isObject(query) ? query['node'] : undefined;
+    out.push({
+      name: entry['key'].toLowerCase(),
+      query,
+      recursive: isObject(inner) && inner['type'] === 'RECURSIVE_CTE_NODE',
+    });
   }
-  if (!isObject(value)) return;
-  const map = value['cte_map'];
-  if (isObject(map) && Array.isArray(map['map'])) {
-    for (const entry of map['map']) {
-      if (isObject(entry) && typeof entry['key'] === 'string') out.add(entry['key'].toLowerCase());
-    }
-  }
-  for (const v of Object.values(value)) cteNames(v, out);
+  return out;
 }
 
-/** Table references: only the allowed names, unqualified; no table function (spec §9.2). */
-function checkTables(value: Json, allowed: ReadonlySet<string>): void {
+/**
+ * Table references (spec §9.2): an unqualified input view, or a CTE in scope where it is read —
+ * the CTEs of an enclosing query, for a CTE body only the ones declared before it (and itself when
+ * `RECURSIVE`), as DuckDB binds them. No table function. A CTE named like a run table therefore
+ * never opens that table (verifier T-R1-08).
+ */
+function checkTables(value: Json, views: ReadonlySet<string>, scope: ReadonlySet<string>): void {
   if (Array.isArray(value)) {
-    for (const v of value) checkTables(v, allowed);
+    for (const v of value) checkTables(v, views, scope);
     return;
   }
   if (!isObject(value)) return;
@@ -72,9 +84,23 @@ function checkTables(value: Json, allowed: ReadonlySet<string>): void {
   if (type === 'BASE_TABLE') {
     const qualified = Boolean(value['schema_name']) || Boolean(value['catalog_name']);
     const name = typeof value['table_name'] === 'string' ? value['table_name'].toLowerCase() : '';
-    if (qualified || !allowed.has(name)) throw fail('sql.error.forbidden');
+    if (qualified || !(views.has(name) || scope.has(name))) throw fail('sql.error.forbidden');
   }
-  for (const v of Object.values(value)) checkTables(v, allowed);
+  const ctes = ctesOf(value);
+  if (ctes.length > 0) {
+    const before = new Set(scope);
+    for (const cte of ctes) {
+      const inBody = new Set(before);
+      if (cte.recursive) inBody.add(cte.name);
+      checkTables(cte.query, views, inBody);
+      before.add(cte.name);
+    }
+    for (const [key, v] of Object.entries(value)) {
+      if (key !== 'cte_map') checkTables(v, views, before);
+    }
+    return;
+  }
+  for (const v of Object.values(value)) checkTables(v, views, scope);
 }
 
 function hasOrderBy(node: Json): boolean {
@@ -92,8 +118,9 @@ const PARAM = /^\$([A-Za-z_][A-Za-z0-9_]*)/;
  * final `;` (comments after it are kept) so the statement can be wrapped in a subquery. Whatever
  * this scanner gets wrong is caught by the second parse in `check`.
  */
-export function replaceParams(sql: string): { sql: string; keys: string[] } {
+export function replaceParams(sql: string): { sql: string; keys: string[]; commentDepth: number } {
   const keys: string[] = [];
+  let commentDepth = 0;
   let out = '';
   let i = 0;
   const n = sql.length;
@@ -121,6 +148,7 @@ export function replaceParams(sql: string): { sql: string; keys: string[] } {
       while (j < n) {
         if (sql[j] === '/' && sql[j + 1] === '*') {
           depth += 1;
+          commentDepth = Math.max(commentDepth, depth);
           j += 2;
         } else if (sql[j] === '*' && sql[j + 1] === '/') {
           depth -= 1;
@@ -149,7 +177,7 @@ export function replaceParams(sql: string): { sql: string; keys: string[] } {
     } else copyTo(i + 1);
   }
   if (semicolon >= 0) out = out.slice(0, semicolon) + out.slice(semicolon + 1);
-  return { sql: out, keys };
+  return { sql: out, keys, commentDepth };
 }
 
 /**
@@ -209,31 +237,35 @@ export class DuckDbInspector implements SqlInspector {
     let text: string | null;
     try {
       text = this.db.scalar('SELECT json_serialize_sql(CAST(? AS VARCHAR))', [sql]);
-    } catch {
-      throw fail('duckdb.error.unavailable');
+    } catch (err) {
+      // The parser exists (checked by the caller): DuckDB refused the text (e.g. invalid UTF-16).
+      throw fail('sql.error.syntax', {}, err instanceof DuckDbError ? err.message : undefined);
     }
     try {
       return JSON.parse(text ?? '{"error":true}') as Serialized;
     } catch {
-      throw fail('duckdb.error.unavailable');
+      throw fail('sql.error.syntax');
     }
   }
 
   check(sql: string, views: readonly string[], params: readonly string[]): SqlChecked {
     if (!this.db.parser) throw fail('duckdb.error.unavailable');
+    const rewritten = replaceParams(sql);
+    // DuckDB's parser is quadratic in comment nesting; refuse before it runs (verifier T-R1-08).
+    if (rewritten.commentDepth > MAX_COMMENT_DEPTH) throw fail('sql.error.syntax');
     const ast = this.serialize(sql);
     if (ast.error) {
-      if (ast.error_type === 'parser') throw fail('sql.error.syntax', {}, ast.error_message);
-      throw fail('sql.error.notSelect');
+      const message = ast.error_message ?? '';
+      if (ast.error_type !== 'parser' && NOT_SELECT.test(message))
+        throw fail('sql.error.notSelect');
+      throw fail('sql.error.syntax', {}, message || undefined);
     }
     const statements = ast.statements ?? [];
     if (statements.length === 0) throw fail('sql.error.notSelect');
     if (statements.length > 1) throw fail('sql.error.multipleStatements');
     const stmt = statements[0]!;
 
-    const allowed = new Set(views.map((v) => v.toLowerCase()));
-    cteNames(stmt.node, allowed);
-    checkTables(stmt.node, allowed);
+    checkTables(stmt.node, new Set(views.map((v) => v.toLowerCase())), new Set());
 
     const declared = new Set(params);
     for (const { key } of stmt.named_param_map) {
@@ -241,8 +273,11 @@ export class DuckDbInspector implements SqlInspector {
         throw fail('sql.error.unknownParam', { param: /^\d+$/.test(key) ? '?' : key });
       }
     }
+    // DuckDB folds parameter names to one spelling: check every occurrence as written.
+    for (const key of rewritten.keys) {
+      if (!declared.has(key)) throw fail('sql.error.unknownParam', { param: key });
+    }
 
-    const rewritten = replaceParams(sql);
     const again = this.serialize(rewritten.sql);
     const stmt2 = again.statements?.[0];
     if (
@@ -274,7 +309,8 @@ export class DuckDbInspector implements SqlInspector {
       }
       const result = this.db.query(
         `DESCRIBE ${checked.sql}`,
-        checked.paramKeys.map(() => null),
+        // A text, not NULL: DuckDB may type a NULL expression differently from a run.
+        checked.paramKeys.map(() => ''),
       );
       rows = result
         .toArray()

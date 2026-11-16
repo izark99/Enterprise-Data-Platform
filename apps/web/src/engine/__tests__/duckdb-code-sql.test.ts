@@ -89,7 +89,14 @@ describe('replaceParams (the `$key` lexer)', () => {
     expect(replaceParams('SELECT $1, ? FROM luong')).toEqual({
       sql: 'SELECT $1, ? FROM luong',
       keys: [],
+      commentDepth: 0,
     });
+  });
+
+  it('measures comment nesting outside strings (deep nesting is refused before the parser)', () => {
+    expect(replaceParams('SELECT 1 /* a /* b /* c */ */ */').commentDepth).toBe(3);
+    expect(replaceParams("SELECT '/* /* /*' AS s -- /* /*\n").commentDepth).toBe(0);
+    expect(replaceParams(`SELECT 1 ${'/*'.repeat(40)}`).commentDepth).toBe(40);
   });
 
   it('drops only a final semicolon, keeping comments after it', () => {
