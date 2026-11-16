@@ -1,2 +1,8 @@
-// Zod schemas of flow, slots and node configs arrive in phase P1 (06-plan §4).
-export const FLOW_SCHEMA_PACKAGE = '@hrflow/flow-schema';
+// Zod source of flow definitions, input slots, params and node configs (06-plan T-R1-02).
+export * from './identifier';
+export * from './params';
+export * from './slots';
+export * from './nodes';
+export * from './transforms';
+export * from './flow';
+export * from './migrate';

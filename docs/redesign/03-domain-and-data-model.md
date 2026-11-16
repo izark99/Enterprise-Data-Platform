@@ -146,6 +146,34 @@ Flow definition shape (`FlowDefinitionSchema`): `schemaVersion: 1`, `params[]` (
 `toPort?`), `ui?`. Invariants: unique node ids, edges reference existing nodes, unique slot keys,
 acyclic graph.
 
+Schemas live in `packages/flow-schema/src/` (T-R1-02): `identifier.ts`, `params.ts`, `slots.ts`,
+`nodes.ts` (input / control / output nodes), `transforms.ts` (§12.1.1–§12.1.8, §12.2), `flow.ts`,
+`migrate.ts`. Every object is strict (an unknown field is an error). Each invariant failure has its
+own issue path: `nodes.<i>.id`, `edges.<i>.from|to`, `inputSlots.<i>.key`, `edges` (cycle).
+
+Defaults and limits the spec does not write (learned from the previous implementation
+`6fd5868:packages/flow-schema/src/`; spec defaults are not repeated here):
+
+| Where | Field | Default / rule |
+|-------|-------|----------------|
+| Identifier | column, slot, param, port, node id | `^[a-z_][a-z0-9_]*$` |
+| Node | `type` · `config` | `^[a-z]+\.[a-zA-Z]+$` · `{}` |
+| Flow | `params`, `inputSlots`, `edges` · `nodes` | `[]` · at least 1 |
+| Flow `ui` | `positions` · `notes` | `{}` · `[]` |
+| Param | `required` · `log` unset | `false` · logged by type: free-text `string` not logged, other types logged |
+| Slot | `required` · `accept` · `sheet` | `true` · `.xlsx, .xls` · `{ mode: 'byIndex', value: 0 }` (0-based) |
+| Slot | `headerRow` · `headerRows` · `dataStartRow` | `1` (1-based) · `1`, max 5 · `headerRow + headerRows`, never inside the header |
+| Slot | `unmergeCells` · `multiple` · `maxRows` | `'none'` (or `'fillDown'`) · `{ enabled: false, minFiles: 1, maxFiles: 50 }`, `minFiles <= maxFiles` · optional, warning above it |
+| Slot | `skipRows` | `{ whenBlank: key[] (≥ 1, slot columns), whenKeyContains: [] }`: a row whose `whenBlank` columns are all blank, or contain one of the texts (normalised), is skipped, not an error |
+| Slot column | `required` · `presence` unset · `rules` · `decimalSeparator` | `false` · follows `required` (`true` → `'required'`) · `[]` · `'.'` (or `','`) for numbers stored as text |
+| Slot column | `key` · keys · `defaultValue` | must not start with `_` · unique in the slot · fits the type (`date` `YYYY-MM-DD`, `datetime` `YYYY-MM-DDTHH:mm:ss`), not with `required: true` |
+| Slot column | rule `severity` · `dateFormats` | `'error'` · `excelSerial` or tokens `yyyy MM M dd d HH mm ss` with separators |
+| `control.compare` | `tolerance` · `carryColumns` · `sideLabels` | `'0'`, ≥ 0 · `[]` · optional `{ left, right }` (unset = i18n "A" / "B"); metric labels unique |
+| `output.excel` | `fileName` · sheet `name` | `'output.xlsx'` · 1–31 chars, none of `: \ / ? * [ ]`, no apostrophe at either end, unique without case |
+| `transform.formula` | `title` · column `key` | trimmed, 1–200 chars · unique in the node |
+| `code.sql` | `inputs[].port` | unique |
+
+
 ## 4. Business rules and calculations
 
 ### 4.1 Version lifecycle
@@ -330,4 +358,5 @@ the Personal Data Protection Law in force from 2026 — verify the current text)
 | D-03-1 | DECISION | The new schema reproduces this model in a new Supabase project (ADR-012); behaviour reference stays in `docs/archive/spec.md`. |
 | D-03-2 | DECISION | Version lifecycle SQL stays duplicated for flows and reference tables (ADR-007). |
 | A-03-1 | ASSUMPTION | This document is complete enough to rebuild the schema; a gap found while writing the migrations is settled with the owner (`06-plan.md` Q-06-2). |
+| A-03-2 | ASSUMPTION | The §3 defaults the spec does not write (T-R1-02) repeat the previous implementation (CLAUDE.md: read it in git, write the answer here); not yet confirmed by the owner. |
 | Q-03-1 | OPEN QUESTION | Who calls `purge_run_logs()` and how long `audit_logs` are kept (C-5) is not decided. Default until decided: nothing is purged automatically. |
