@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 12:52 - T-R1-05 (Harold trả lời 1A): xác nhận các quy tắc đầu ra của `control.compare` và tên file của `output.excel` ghi ở `docs/redesign/03-domain-and-data-model.md` §4.3 (học từ bản cũ `6fd5868`), cùng nội dung run context (`run.slots` giữ kết quả kiểm tra file, tham số đã định dạng sẵn, `emitFile`) và hook tùy chọn `warnings?` trong plugin contract (§4.9).
+
 2026-11-16 12:41 - T-R1-05 (Harold trả lời 1A, 2A, 3B, 4A): (1) plugin nhận dữ liệu lần chạy qua trường tùy chọn `run?: { slots, params, emitFile }` của `ExecuteContext`, `executor.ts` truyền vào cho mọi node; thiếu thì báo `executor.error.noRunContext`; (2) chữ tiêu đề trong file kết quả (cột, dòng tổng của `control.compare`…) lấy qua hàm dịch `t(key, vars)` truyền vào context, dựng từ file locale Harold đã sửa; engine không chứa chữ giao diện; (3) `compare.error.duplicateKey` hiển thị đúng giá trị khóa bị trùng như câu chữ hiện có (ngoại lệ trên màn hình của 03 §4.7, không bao giờ vào `run_logs`); (4) giữ `exceljs` 4.4.0; chấp nhận `buffers@0.1.1` (phụ thuộc bắc cầu) không khai báo licence.
 
 2026-11-16 09:35 - T-R1-05 AC (g) (Harold trả lời 1A): loader DuckDB chỉ có từ T-R1-06, nên ở T-R1-05 test kiểm 3 plugin của flow lương – chấm công chỉ có `execute` (không `compile`) và không file nào trong `src/engine` import `@duckdb/duckdb-wasm` hay `engine/duckdb`; T-R1-06 thêm bước 7: chạy lại flow này với spy trên `loader.ts`, loader không được gọi.

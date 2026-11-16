@@ -234,6 +234,17 @@ Worked example (tolerance 0.5 for work days, 0 for overtime):
 | NV002 | 22 | 21 | −1 | (blank) | 0 | 0 | mismatch on work days |
 | nv003␠ | 20 | — | — | — | — | — | joins `NV003` after normalisation |
 
+Output rules (`apps/web/src/engine/nodes/control-compare.ts`, T-R1-05; learned from `6fd5868`, owner confirmed D-03-6, MEMORY 2026-11-16 12:52):
+
+| Area | Rule |
+|------|------|
+| `mismatched` columns | Keys `<col>__left`, `__right`, `__diff`; base `<left>_<right>` when the two columns differ; a taken key gets the 1-based metric index (`cong_2__left`); plus `_mismatched_metrics` = failing metric labels joined with ", " |
+| `summary` | Columns metric, tolerance, matched, mismatched, only_left, only_right, total_diff; one row per metric plus a total row (`compare.summary.totalRow`, blank tolerance and total_diff); matched = keys with no failing metric; total_diff = sum of every diff with both values, within tolerance included |
+| Values | Every metric output column is `decimal`; key columns take the left value; carry columns the left value, the right one when the left is blank or missing (same type only); `only_left` / `only_right` keep the input schema |
+| Order | `mismatched` and `only_left` in left order, `only_right` in right order |
+| `duplicateKey` | Trimmed original values, joined with " \| " for composite keys (on-screen only, 4.7) |
+| `output.excel` file name | `{param}` → parameter value (month `YYYY-MM`, date `YYYY-MM-DD`, formatted by the caller); unknown placeholder → empty; `\ / : * ? " < > \|` and control characters → `_`; empty → `output`; `.xlsx` added when missing |
+
 ### 4.4 Key normalisation
 
 `normalizeKeyPart(v)` = NFC → collapse whitespace runs to one space → trim → lowercase.
@@ -309,6 +320,8 @@ One exception in on-screen messages (never in `run_logs`): `compare.error.duplic
 | Decimal | `decimalFromNumber` = 15 significant digits; a decimal column is a `Float64Array` plus a row → exact-text map for values a double cannot hold (spec §9.4); big.js division keeps its default of 20 decimal places before the half-up rounding to 10. |
 | Plugin contract | `checkConfig` returns an array of `EngineError` (it does not throw). The `compile` signature is provisional until T-R1-06 defines it. |
 | Run context (MEMORY 2026-11-16 12:41, 1A) | `ExecuteContext` has an optional `run?: { slots, params, emitFile }`, passed through by `executor.ts` for every node; a node that needs it and gets none fails with `executor.error.noRunContext` |
+| Run context content (D-03-6) | `run.slots` holds the `SlotReadResult` (table + report) of the pre-run check per slot key, so files are read once; the executor releases those tables, so one `slots` object serves one run. `run.params` values are `string \| number \| boolean \| null`. `emitFile({fileName, mimeType, bytes})`. `input.excel` `checkConfig` reports `executor.error.unknownSlot`. |
+| Plugin hook `warnings?` (D-03-6) | Optional `warnings?(config, flow): NodeWarning[]` for design-time warnings such as `inputExcel.warning.extraColumnsRuntimeOnly` (spec §12.1.9); called by the Designer (P6) |
 | Texts (MEMORY 2026-11-16 12:41, 2A) | Output titles (e.g. compare columns, summary rows) come from an optional translator `t(key, vars)` in the design / execute context, built from the owner-edited locale; the engine holds no UI text; without `t` the key is used |
 
 ## 5. Validation rules by layer
@@ -393,4 +406,5 @@ the Personal Data Protection Law in force from 2026 — verify the current text)
 | D-03-3 | DECISION (MEMORY 2026-11-16 07:55, 1A) | The §3 defaults the spec does not write (T-R1-02) repeat the previous implementation (read in git, written here); confirmed by the owner. |
 | D-03-4 | DECISION (MEMORY 2026-11-16 08:13, 3A) | Engine core rules of 4.9: learned from the previous implementation or chosen in T-R1-03; confirmed by the owner. |
 | D-03-5 | DECISION (MEMORY 2026-11-16 09:26, 2A) | The reader rules of 4.6: learned from the previous implementation or chosen in T-R1-04; confirmed by the owner. |
+| D-03-6 | DECISION (MEMORY 2026-11-16 12:52, 1A) | Compare / output rules of 4.3 and the run-context and `warnings?` rows of 4.9: learned from the previous implementation or chosen in T-R1-05; confirmed by the owner. |
 | Q-03-1 | OPEN QUESTION | Who calls `purge_run_logs()` and how long `audit_logs` are kept (C-5) is not decided. Default until decided: nothing is purged automatically. |
