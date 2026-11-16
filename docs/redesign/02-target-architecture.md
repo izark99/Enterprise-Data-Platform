@@ -54,6 +54,8 @@ Fixed. A dependency that is not in this table, or a newer major version, needs t
 | Tooling | Node ≥ 22 · pnpm 10 (workspace; dependency build scripts allowed for `esbuild` only) | |
 | Hosting | Cloudflare Pages (static) · Supabase Free (Auth, Postgres, one Edge Function on Deno) · GitHub Actions | |
 
+`exceljs` 4.4.0 brings 176 transitive packages (155 MIT, 12 ISC, Apache-2.0, BSD-3-Clause, …); `buffers@0.1.1` declares no licence — accepted (MEMORY 2026-11-16 12:41, 4A).
+
 `@types/node` (MEMORY 2026-11-13 19:08) is visible only to test files (`__tests__`), `vite.config.ts` and build scripts/plugins; the app and engine tsconfigs keep `types: []`. The E2E tree does not use it: Node-only values of the E2E config and specs (Chromium path, output dir, the production CSP read from `_headers`) live in plain JavaScript (`e2e/support/node-env.mjs`, typed by `node-env.d.mts`); root `pnpm typecheck` also checks `e2e/` and `playwright.config.ts` (`e2e/tsconfig.json`).
 
 ## 2. Layers and modules

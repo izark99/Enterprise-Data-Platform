@@ -193,7 +193,7 @@ Written 2026-11-13 with the `clarify` skill (MEMORY 2026-11-13 19:08, owner 1A 2
 
 **Goal.** S1 part 1: the payroll–timesheet flow reproduces `fixtures/payroll-timesheet/expected.json` in TypeScript, without DuckDB.
 
-**Files.** Create: `src/engine/nodes/{input-excel.ts,control-compare.ts,output-excel.ts}`, `src/engine/io/{excel-writer.ts,xlsx-stream-writer.ts}`, `src/engine/__tests__/payroll-timesheet.test.ts`. Change: `nodes/index.ts`, `apps/web/package.json`.
+**Files.** Create: `src/engine/nodes/{input-excel.ts,control-compare.ts,output-excel.ts}`, `src/engine/io/{excel-writer.ts,xlsx-stream-writer.ts}`, `src/engine/__tests__/payroll-timesheet.test.ts`. Change: `nodes/index.ts`, `apps/web/package.json`, `core/executor.ts` (run context, MEMORY 2026-11-16 12:41, 1A).
 
 **Steps.**
 1. Install `exceljs@^4.4.0`.

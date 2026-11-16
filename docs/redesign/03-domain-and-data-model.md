@@ -288,6 +288,8 @@ Stored: user id, flow version id, parameters flagged for logging, per slot `{ sl
 files: [{ sha256 of file NAME, byte size }] }`, status, duration, rows out, error **key**, error
 node id, flat client info. Never stored: file names, cell values, raw error text.
 
+One exception in on-screen messages (never in `run_logs`): `compare.error.duplicateKey` shows the duplicated key value (`{{key}}`), as the owner text says (MEMORY 2026-11-16 12:41, 3B).
+
 ### 4.8 Reference tables
 
 - Columns are defined at table level; every version uses the current column set.
@@ -306,6 +308,8 @@ node id, flat client info. Never stored: file names, cell values, raw error text
 | Perf | User Timing measures `hrflow:<stage>`, stage ∈ `read` · `upload` · `sql` · `write` · `run`; names only, no data. |
 | Decimal | `decimalFromNumber` = 15 significant digits; a decimal column is a `Float64Array` plus a row → exact-text map for values a double cannot hold (spec §9.4); big.js division keeps its default of 20 decimal places before the half-up rounding to 10. |
 | Plugin contract | `checkConfig` returns an array of `EngineError` (it does not throw). The `compile` signature is provisional until T-R1-06 defines it. |
+| Run context (MEMORY 2026-11-16 12:41, 1A) | `ExecuteContext` has an optional `run?: { slots, params, emitFile }`, passed through by `executor.ts` for every node; a node that needs it and gets none fails with `executor.error.noRunContext` |
+| Texts (MEMORY 2026-11-16 12:41, 2A) | Output titles (e.g. compare columns, summary rows) come from an optional translator `t(key, vars)` in the design / execute context, built from the owner-edited locale; the engine holds no UI text; without `t` the key is used |
 
 ## 5. Validation rules by layer
 
