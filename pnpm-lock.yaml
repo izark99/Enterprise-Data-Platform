@@ -41,6 +41,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@duckdb/duckdb-wasm':
+        specifier: 1.32.0
+        version: 1.32.0
       '@hrflow/flow-schema':
         specifier: workspace:*
         version: link:../../packages/flow-schema
@@ -190,6 +193,9 @@ packages:
 
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
+
+  '@duckdb/duckdb-wasm@1.32.0':
+    resolution: {integrity: sha512-IewXTNYEjsZCPE9weUWgtjGxUlMRo7qhX0GF6tq/KjK8bnY+RAl4cyUdYUfcdzbyb4b9ZxPC+FOsCcxgaKFWMg==}
 
   '@emnapi/core@2.0.0-beta.2':
     resolution: {integrity: sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A==}
@@ -2120,6 +2126,10 @@ snapshots:
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
+
+  '@duckdb/duckdb-wasm@1.32.0':
+    dependencies:
+      apache-arrow: 17.0.0
 
   '@emnapi/core@2.0.0-beta.2':
     dependencies:

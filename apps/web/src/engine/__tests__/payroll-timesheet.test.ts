@@ -8,7 +8,7 @@ import {
 } from '@hrflow/flow-schema';
 import { CompareConfigSchema } from '@hrflow/flow-schema';
 import ExcelJS from 'exceljs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Big, isDecimal, type Decimal } from '../core/decimal';
 import { EngineError } from '../core/errors';
 import { executePlan } from '../core/executor';
@@ -20,6 +20,10 @@ import { readSlot, type SlotReadResult } from '../io/validation';
 import { MISMATCHED_METRICS_COLUMN, executeCompare } from '../nodes/control-compare';
 import { NODE_PLUGINS, type RunFile, type Translate } from '../nodes/index';
 import { XLSX_MIME } from '../nodes/output-excel';
+import * as duckdbLoader from '../duckdb/loader';
+
+// Spy on the DuckDB loader (T-R1-06 step 7): this flow has no DuckDB node, so it never loads DuckDB.
+vi.mock('../duckdb/loader', { spy: true });
 
 /**
  * Acceptance flow of spec §24 (T-R1-05): the payroll–timesheet flow on the six fake fixture files
@@ -331,7 +335,16 @@ describe('payroll–timesheet acceptance flow (spec §24, T-R1-05)', () => {
     }
   }, 60_000);
 
-  it('runs only TypeScript nodes and no engine file imports DuckDB (AC g, owner 1A)', () => {
+  it('runs without calling the DuckDB loader (AC g, T-R1-06 step 7, spec §13.1 lazy load)', async () => {
+    vi.mocked(duckdbLoader.loadDuckDb).mockClear();
+    vi.mocked(duckdbLoader.loadWasmBytes).mockClear();
+    const { files } = await run(flow);
+    expect(files).toHaveLength(1);
+    expect(duckdbLoader.loadDuckDb).not.toHaveBeenCalled();
+    expect(duckdbLoader.loadWasmBytes).not.toHaveBeenCalled();
+  });
+
+  it('runs only TypeScript nodes and no core, io or node file imports DuckDB (AC g, owner 1A)', () => {
     for (const type of ['input.excel', 'control.compare', 'output.excel']) {
       const plugin = NODE_PLUGINS[type]!;
       expect(typeof plugin.execute).toBe('function');
@@ -340,7 +353,9 @@ describe('payroll–timesheet acceptance flow (spec §24, T-R1-05)', () => {
     const root = new URL('../', import.meta.url);
     const files = fs
       .readdirSync(root, { recursive: true })
-      .filter((f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('payroll-timesheet.test.ts'));
+      .filter((f) => /\.(ts|tsx)$/.test(f) && !f.endsWith('payroll-timesheet.test.ts'))
+      // The DuckDB runtime itself and its tests (T-R1-06) are the only importers allowed.
+      .filter((f) => !/^duckdb\//.test(f) && !/^__tests__\/duckdb-/.test(f));
     expect(files.length).toBeGreaterThan(20);
     const duckdb =
       /(from\s+|import\s*\(?\s*)['"]([^'"]*\/duckdb(\/[^'"]*)?|@duckdb\/duckdb-wasm[^'"]*)['"]/;

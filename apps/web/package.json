@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "1.32.0",
     "@hrflow/flow-schema": "workspace:*",
     "apache-arrow": "17.0.0",
     "big.js": "^7.0.1",

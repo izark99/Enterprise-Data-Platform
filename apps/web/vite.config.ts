@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { duckDbBrowserBindings, duckDbWasm } from './build/duckdb-wasm.ts';
 
 // `vite preview` sends the production security headers (docs/redesign/06-plan.md T-R1-01), so E2E
 // runs under the CSP of `public/_headers`. HSTS is left out: it would pin `localhost` to HTTPS.
@@ -32,7 +33,11 @@ function readProductionHeaders(): Record<string, string> {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), duckDbWasm()],
+  // The engine worker is bundled with its own plugin list (spec §13.1: DuckDB runs in the worker).
+  worker: {
+    plugins: () => [duckDbBrowserBindings()],
+  },
   preview: {
     headers: readProductionHeaders(),
   },
