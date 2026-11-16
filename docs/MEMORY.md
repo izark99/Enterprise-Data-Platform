@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 07:41 - T-R1-01 (Harold trả lời 1A): giữ export `productionCsp` trong `e2e/support/node-env.mjs` (+ khai báo kiểu trong `node-env.d.mts`) để `e2e/ui/csp.spec.ts` đọc chuỗi CSP thật từ `apps/web/public/_headers`, không chép cứng chuỗi vào spec; đúng cách 18:35 (giá trị cần Node của E2E nằm trong `node-env.mjs`, E2E không dùng `@types/node`).
+
 2026-11-13 19:33 - Xác nhận 2 giả định của P1 (Harold trả lời 1A, 2A): (1) T-R1-10 thêm trang harness chỉ có trong bản build E2E (`apps/web/e2e-engine.html`, build `--mode e2e`) để chạy engine trên Chromium khi P1 chưa có màn hình; bản production không được chứa trang này; (2) job CI `perf` (1.000.000 dòng × 30 cột) chạy mỗi lần push và PR khi repo còn public; khi chuyển repo sang private thì đổi sang chỉ chạy khi push vào `main` hoặc chạy tay.
 
 2026-11-13 19:08 - Viết task P1 (Harold trả lời 1A, 2A, 3A, 4A, 5B): (1) cho phép `@types/node` làm devDependency, chỉ dùng trong file test (`__tests__`), `vite.config.ts` và script/plugin build; tsconfig của app và engine giữ `types: []`; phần E2E giữ cách 18:35 (giá trị cần Node đặt trong `e2e/support/node-env.mjs`); (2) thêm `@types/big.js ^7.0.0` vào 02 §1.1; (3) `cases.json` có 180 case (182 là số test: 180 case + kiểm độ phủ hàm + so với `golden-excel.xlsx`), sửa tài liệu, không sửa fixture; (4) P1 chia 10 task T-R1-01…T-R1-10 như `docs/redesign/06-plan.md` §6, giữ cách chia module engine `core`, `io`, `duckdb`, `formula`, `nodes`; (5) lần chạy 1.000.000 dòng × 30 cột là một job CI riêng (`perf`). Giữ nguyên từ quyết định 18:35: `<main>` bọc trang placeholder, không tắt rule axe nào; 5 lỗi MINOR của verifier P0 (Q-06-3) đưa vào task của phase tương ứng.

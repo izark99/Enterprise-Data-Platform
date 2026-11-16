@@ -127,7 +127,7 @@ Written 2026-11-13 with the `clarify` skill (MEMORY 2026-11-13 19:08, owner 1A 2
 
 **Goal.** E2E runs the app under the CSP of `apps/web/public/_headers`, before P1 adds a worker and WASM (Q-06-3 item 4).
 
-**Files.** Change: `apps/web/vite.config.ts`, `apps/web/tsconfig.node.json`, `apps/web/package.json` (`@types/node`), `docs/redesign/06-plan.md` (Q-06-3). Create: `e2e/ui/csp.spec.ts`.
+**Files.** Change: `apps/web/vite.config.ts`, `apps/web/tsconfig.node.json`, `apps/web/package.json` (`@types/node`), `docs/redesign/06-plan.md` (Q-06-3). Create: `e2e/ui/csp.spec.ts`. Also changed (MEMORY 2026-11-16 07:41, 1A): `e2e/support/node-env.mjs` + `node-env.d.mts` (`productionCsp`, read from `_headers`).
 
 **Steps.**
 1. Install `@types/node@^22.18.0` as a devDependency of `@hrflow/web` (02 §1.1); add `"types": ["node"]` to `tsconfig.node.json` only. `tsconfig.app.json` keeps no Node types.
