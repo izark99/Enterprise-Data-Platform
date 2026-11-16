@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-16 08:52 - T-R1-04 (Harold trả lời 1A, 2A, 3A): (1) file `.xls` thực chất là HTML/XML (bản xuất của một số hệ thống HR) bị từ chối với `validation.fileUnreadable`; chỉ nhận `.xls` dạng OLE2 thật; (2) cột `string` hiển thị ngày dạng ngắn của Excel (`m/d/yy`) thành `dd/mm/yyyy`; (3) giải nén entry `.xlsx` chỉ dùng `fflate` (`Inflate`, theo luồng, đếm byte và dừng sớm) ở mọi nơi, không dùng `DecompressionStream`.
+
 2026-11-16 08:13 - T-R1-03 (Harold trả lời 1A, 2A, 3A): (1) test khối lượng lớn (1.000.000 dòng × 30 cột) chỉ chạy khi có `HRFLOW_HEAVY=1`; lần chạy mặc định giữ bản 100.000 dòng; (2) ESLint chặn `document`, `window`, `localStorage`, `sessionStorage`, `indexedDB`, `navigator` trong `src/engine` (`no-restricted-globals`, sửa `eslint.config.js` trong T-R1-03); (3) xác nhận các quy tắc lõi engine ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (key lỗi planner, thứ tự topo, tham số `node` = nhãn node, sự kiện tiến độ, giải phóng bảng, tên perf `hrflow:<stage>`, decimal 15 chữ số / `Float64Array` + text chính xác, `checkConfig` trả mảng lỗi, chữ ký `compile` tạm đến T-R1-06).
 
 2026-11-16 07:58 - Cách hỏi (Harold yêu cầu): câu hỏi cần Harold đọc hoặc xác nhận tài liệu phải đưa luôn nội dung vào tin nhắn, hoặc đường dẫn chính xác tới file và mục, để đọc nhanh. Đã ghi vào `CLAUDE.md` (Working with the owner).
@@ -347,8 +349,6 @@
 2026-11-03 09:07 - Thêm `@axe-core/playwright` (MPL-2.0, chỉ dev dependency, không vào bundle) để quét a11y tự động trong E2E; Harold đồng ý ngoại lệ license.
 
 2026-11-03 09:07 - Tiêu đề trang dạng câu kết luận chỉ áp dụng màn Kết quả (có số động, VD "Kỳ 09/2026 có 9 nhân viên lệch công"); màn Kết quả thêm KPI card (vạch trên 4px, số `display-xl`) và 1 card tối cho kết luận chính. Các màn khác giữ tiêu đề hiện tại.
-
-2026-10-30 23:29 - Giải nén entry .xlsx: đường đồng bộ dùng `fflate` (MIT, giải nén theo luồng, dừng sớm được) thay bộ giải mã DEFLATE tự viết; đường bất đồng bộ (worker) giữ bộ giải nén có sẵn của trình duyệt (`DecompressionStream`) kèm đếm byte và dừng sớm.
 
 2026-10-30 13:29 - Ngoại lệ thang chữ lớn: canvas Designer, ô Monaco/công thức và bảng xem trước dữ liệu giữ chữ 14px; phần còn lại theo §25.1.
 

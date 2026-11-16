@@ -248,7 +248,7 @@ Used by `control.compare`, the slot rule `unique`, and (default on, Admin can sw
 | Decimal | Money and day counts use `big.js` in TS and `DECIMAL(38,10)` in DuckDB; decimals cross to the UI as strings |
 | Rounding | `ROUND` is half away from zero (Excel behaviour) |
 | Blank metric cell | Treated as 0 in arithmetic, `""` in concatenation; a formula that is only a column reference returns blank for a blank cell |
-| Text column | Takes the text Excel displays (keeps `00123`) |
+| Text column | Takes the text Excel displays (keeps `00123`); Excel's locale short date (`m/d/yy`) is shown as `dd/mm/yyyy` (MEMORY 2026-11-16 08:52, 2A) |
 | Date column | Always accepts a real Excel date cell regardless of the configured text format |
 | Ambiguous numeric text (`"1,500"`) | Warning |
 | Result file name | `month` parameter → `YYYY-MM`; `date` parameter → `YYYY-MM-DD` |
@@ -264,6 +264,8 @@ Used by `control.compare`, the slot rule `unique`, and (default on, Admin can sw
 | Duplicate key within a slot (after normalisation), also across files of the slot | error on every file involved |
 | Row whose key cell holds a configured skip text (e.g. "TỔNG CỘNG") | skipped |
 | `.csv` | not accepted (only `.xlsx`, `.xls`) |
+| `.xls` holding HTML / XML (some HR system exports) | `validation.fileUnreadable`; only real OLE2 `.xls` is read, through SheetJS below 64 MiB (MEMORY 2026-11-16 08:52, 1A) |
+| Decompression | `fflate` `Inflate` only (streamed, bytes counted, early stop), never `DecompressionStream` (MEMORY 2026-11-16 08:52, 3A) |
 | Archive limits | 2 GiB per entry; ratio 1:200 for entries > 16 MiB; per-file budget |
 
 ### 4.7 Run log content (data minimisation)
