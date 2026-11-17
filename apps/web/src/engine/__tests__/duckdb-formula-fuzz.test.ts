@@ -891,4 +891,38 @@ describe('KNOWN BUG', () => {
     expect(await result('=WEEKDAY([d])')).toBe('7');
     expect(await result('=WEEKDAY(1)')).toBe('1');
   });
+
+  // T-R1-09 verifier round 2. `sqlDepth` counts parentheses, CASE and nested SELECTs, but DuckDB
+  // also counts each binary operator of a flat chain (`a + b + …`, `a || b || …`: 1100 `+` fail
+  // alone). SUM / CONCAT of 255 arguments write one flat chain of 254 operators into the level-1
+  // SELECT, the deepest point of the text; with another column that nests ~395 SELECTs (sqlDepth
+  // 791 ≤ MAX_SQL_DEPTH) the node passes design checks and the run fails with
+  // "Max expression depth limit of 1000 exceeded" (duckdb.error.queryFailed).
+  it.fails('a deep column plus SUM / CONCAT of 255 arguments is tooComplex or runs', async () => {
+    const db = await nodeDuckDb();
+    db.exec(FZ_TABLE);
+    const many = (fn: string, a: string) =>
+      `=${fn}(${Array.from({ length: 255 }, () => a).join(',')})`;
+    const failures: string[] = [];
+    for (const wide of [many('SUM', '[n]'), many('CONCAT', '[s]')]) {
+      const columns = [
+        { key: 'a', formula: `=[n]${'^64'.repeat(65)}`, type: 'auto' as const },
+        { key: 'b', formula: wide, type: 'auto' as const },
+      ].map((c) => ({ ...c, onError: 'blank' as const }));
+      let c;
+      try {
+        compileFormula(columns, INPUT, { dialect: DESIGN_DIALECT, from: '"in"', params: [] });
+        c = compileFormula(columns, INPUT, { dialect: DUCKDB_DIALECT, from: 'fz', params: [] });
+      } catch (err) {
+        if (isEngineError(err) && err.messageKey === 'formula.error.tooComplex') continue;
+        throw err;
+      }
+      try {
+        db.query(c.sql, c.params);
+      } catch (err) {
+        failures.push(`${wide.slice(0, 12)}: ${(err as Error).message.slice(0, 60)}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
 });
