@@ -10,6 +10,7 @@ import { outputExcelPlugin } from './output-excel';
 import { outputPreviewPlugin } from './output-preview';
 import { transformDedupePlugin } from './transform-dedupe';
 import { transformFilterPlugin } from './transform-filter';
+import { transformFormulaPlugin } from './transform-formula';
 import { transformGroupByPlugin } from './transform-group-by';
 import { transformJoinPlugin } from './transform-join';
 import { transformSelectPlugin } from './transform-select';
@@ -286,4 +287,5 @@ export const NODE_PLUGINS: NodeRegistry = {
   [transformGroupByPlugin.type]: transformGroupByPlugin,
   [transformDedupePlugin.type]: transformDedupePlugin,
   [codeSqlPlugin.type]: codeSqlPlugin,
+  [transformFormulaPlugin.type]: transformFormulaPlugin,
 };
