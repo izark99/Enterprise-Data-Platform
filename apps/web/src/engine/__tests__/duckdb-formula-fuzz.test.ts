@@ -4,7 +4,15 @@ import { parseDecimal } from '../core/decimal';
 import { isEngineError } from '../core/errors';
 import type { Schema, Value } from '../core/types';
 import { DUCKDB_DIALECT } from '../duckdb/scope';
-import { compileFormula, DESIGN_DIALECT, type FormulaParamDef } from '../formula/compile';
+import {
+  compileFormula,
+  DESIGN_DIALECT,
+  MAX_PROJECTED,
+  MAX_SQL_DEPTH,
+  MAX_SQL_LENGTH,
+  sqlDepth,
+  type FormulaParamDef,
+} from '../formula/compile';
 import { FUNCTIONS } from '../formula/functions';
 import { FormulaError, MAX_LENGTH, parseFormula } from '../formula/parser';
 import type { NodeWarning } from '../nodes/index';
@@ -156,18 +164,6 @@ function generator(next: () => number) {
     return `${f.name}(${Array.from({ length: n }, () => gen(depth - 1)).join(',')})`;
   };
   return { gen, pick };
-}
-
-/** A DuckDB failure that matches a bug pinned in the KNOWN BUG group below. */
-function knownBug(formula: string, message: string): string | null {
-  if (
-    /Casting value "-?\d+" to type DECIMAL\(38,10\) failed/.test(message) &&
-    formula.includes('INT(')
-  )
-    return 'INT overflow';
-  if (message.includes('memory exhausted') || message.includes('Max expression depth'))
-    return 'SQL nesting too deep';
-  return null;
 }
 
 describe('parser fuzz (no DuckDB)', () => {
@@ -426,9 +422,7 @@ describe('transpiler fuzz on DuckDB (fixed seed)', () => {
         for (const c of seen) bump(`row:${['#DIV/0!', '#VALUE!', '#NUM!', '#N/A'][c - 1]}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        const bug = knownBug(formula, message);
-        if (bug !== null) bump(`KNOWN BUG:${bug}`);
-        else failures.push(`${formula}: ${message.slice(0, 200)}`);
+        failures.push(`${formula}: ${message.slice(0, 200)}`);
       }
       const qms = performance.now() - t1;
       if (qms > worstQuery.ms) worstQuery = { ms: qms, formula, sql: compiled.sql.length };
@@ -688,7 +682,7 @@ describe('size and planning time within the limits', () => {
   }, 1_800_000);
 });
 
-describe('KNOWN BUG', () => {
+describe('verifier findings, fixed (T-R1-09 round 1)', () => {
   async function runs(formula: string): Promise<void> {
     const db = await nodeDuckDb();
     db.exec(FZ_TABLE);
@@ -722,11 +716,173 @@ describe('KNOWN BUG', () => {
   }
 
   // Spec §12.2 "Ngày": a date result outside 1900-01-01 … 9999-12-31 is #NUM!. `date ± number`
-  // maps serial 0 to 1899-12-31 and returns it as a date (EDATE of the same date gives #NUM!).
-  it.fails('DATE(1900,1,1)-1 and [blank date]+0 are #NUM!, not the date 1899-12-31', async () => {
+  // mapped serial 0 to 1899-12-31 and returned it as a date (EDATE of the same date gave #NUM!).
+  it('DATE(1900,1,1)-1 and [blank date]+0 are #NUM!, not the date 1899-12-31', async () => {
     expect(await result('=DATE(1900,1,1)-1')).toBe('#NUM!');
     expect(await result('=[d]+0')).toBe('#NUM!');
   });
+
+  // Spec §12.2: `^` with a constant integer exponent |n| ≤ 64 is exact, and only overflow is
+  // #NUM!. 10^-30 = 1e-30 rounds to 0 on 10 places; 1 / 10^30 overflowed on the way.
+  it('10^-30 is 0 (rounded to 10 places), not #NUM!', async () => {
+    expect(await result('=10^-30')).toBe('0');
+  });
+
+  // Spec §12.2: a text that reads as a number is used as that number; beyond DECIMAL(38,10) a
+  // number is #NUM! (the constant =1e28 is #NUM!); VALUE("1e28") gave #VALUE!.
+  it('VALUE("1e28") overflows to #NUM! like the constant 1e28', async () => {
+    expect(await result('=1e28')).toBe('#NUM!');
+    expect(await result('=VALUE("1e28")')).toBe('#NUM!');
+  });
+
+  // compile.ts INT: `CAST(floor(x) AS DECIMAL(38,10))` was outside TRY; floor of a value in
+  // (-10^28, -10^28 + 1) is -10^28, which does not fit: the query failed instead of #NUM!.
+  it('INT of a negative value just above -10^28 is #NUM!, not a DuckDB error', async () => {
+    await runs('=INT([n]-0.5)');
+  });
+
+  it('INT(-9999999999999999999999999999.5) compiles to a query DuckDB can run', async () => {
+    await runs('=INT(-9999999999999999999999999999.5)');
+  });
+
+  // Were accepted at design time and refused by DuckDB ("Max expression depth limit of 1000
+  // exceeded" / "Parser Error: memory exhausted"). Now each hidden column sits one level above
+  // what it reads and repeated SQL is computed once (305 nested SELECTs), and the depth DuckDB
+  // counts is bounded at design time (`MAX_SQL_DEPTH`, tested below).
+  it('a chain of 50 `^64` (153 characters) runs on DuckDB', async () => {
+    await runs(`=[n]${'^64'.repeat(50)}`);
+  });
+
+  it('a chain of 150 `^3` runs on DuckDB', async () => {
+    await runs(`=[n]${'^3'.repeat(150)}`);
+  });
+
+  // Planning ran out of DuckDB's memory (SQL ≈ 1.3 MB); repeated SQL is now computed once and the
+  // SQL size, projection items and depth are bounded at design time (tested below).
+  it('50 columns of 30 chained multiplications run', async () => {
+    const db = await nodeDuckDb();
+    db.exec(FZ_TABLE);
+    const formula = `=[n]${'*[n]'.repeat(30)}`;
+    const columns = Array.from({ length: 50 }, (_, i) => ({
+      key: `r${i}`,
+      formula,
+      type: 'auto' as const,
+      onError: 'blank' as const,
+    }));
+    const c = compileFormula(columns, INPUT, {
+      dialect: DUCKDB_DIALECT,
+      from: 'fz',
+      params: PARAM_DEFS,
+    });
+    expect(c.sql.length).toBeLessThan(4_000_000);
+    db.query(c.sql, c.params);
+  }, 600_000);
+
+  /** One column per index with a distinct bound constant `#` (so nothing is computed once). */
+  const distinct = (cols: number, formula: string) =>
+    Array.from({ length: cols }, (_, i) => ({
+      key: `r${i}`,
+      formula: formula.replaceAll('#', String(i + 2)),
+      type: 'auto' as const,
+      onError: 'blank' as const,
+    }));
+
+  function tooComplexAt(columns: ReturnType<typeof distinct>): number {
+    try {
+      compileFormula(columns, INPUT, { dialect: DUCKDB_DIALECT, from: 'fz', params: PARAM_DEFS });
+    } catch (err) {
+      if (isEngineError(err) && err.messageKey === 'formula.error.tooComplex') {
+        const path = err.path ?? [];
+        expect(path[0]).toBe('columns');
+        expect(path[2]).toBe('formula');
+        return Number(path[1]);
+      }
+      throw err;
+    }
+    return -1;
+  }
+
+  // Measured (Node bindings, same duckdb-eh.wasm): distinct columns of chained `/[n]` planned in
+  // 8.3 s at 1.93 MB of SQL and ran out of memory at 2.56 MB (40 × 50) and 2.89 MB (15 × 150).
+  it('nodes that ran out of planning memory are tooComplex at design time, at the column that overflows', () => {
+    expect(tooComplexAt(distinct(40, `=#${'/[n]'.repeat(50)}`))).toBeGreaterThan(0);
+    expect(tooComplexAt(distinct(15, `=#${'/[n]'.repeat(150)}`))).toBeGreaterThan(0);
+    expect(tooComplexAt(distinct(50, `=#${'/[n]'.repeat(150)}`))).toBeLessThan(15);
+    // Deeper than DuckDB's expression depth: 150 `^64` (6 exact multiplications each).
+    expect(tooComplexAt(distinct(1, `=[n]${'^64'.repeat(150)}`))).toBe(0);
+    expect(tooComplexAt(distinct(1, `=[n]${'^64'.repeat(66)}`))).toBe(0);
+  });
+
+  it('nodes within the budgets plan and run: distinct 10 × 50 and 2 × 150 `/`, 50 × 30 `*`', async () => {
+    const db = await nodeDuckDb();
+    db.exec(FZ_TABLE);
+    const cases = [
+      distinct(10, `=#${'/[n]'.repeat(50)}`),
+      distinct(2, `=#${'/[n]'.repeat(150)}`),
+      distinct(50, `=[n]${'*[n]*#'.repeat(15)}`),
+      distinct(1, `=[n]${'^64'.repeat(60)}`),
+    ];
+    for (const columns of cases) {
+      expect(tooComplexAt(columns)).toBe(-1);
+      const c = compileFormula(columns, INPUT, {
+        dialect: DUCKDB_DIALECT,
+        from: 'fz',
+        params: PARAM_DEFS,
+      });
+      expect(c.sql.length).toBeLessThanOrEqual(MAX_SQL_LENGTH);
+      expect(c.projected).toBeLessThanOrEqual(MAX_PROJECTED);
+      expect(sqlDepth(c.sql)).toBeLessThanOrEqual(MAX_SQL_DEPTH);
+      db.query(c.sql, c.params);
+    }
+  }, 600_000);
+
+  it('the design-time dialect builds the same SQL as the DuckDB runtime (same budgets)', () => {
+    const columns = distinct(3, '=IF(ISBLANK([s]),LEN([s])*#,ROUND([n]/#,2))&TEXT_JOIN_X');
+    const formula = columns.map((c) => ({
+      ...c,
+      formula: c.formula.replace('&TEXT_JOIN_X', '&[d]&[i]'),
+    }));
+    const options = { from: 'fz', params: PARAM_DEFS, values: PARAM_VALUES };
+    const a = compileFormula(formula, INPUT, { ...options, dialect: DESIGN_DIALECT });
+    const b = compileFormula(formula, INPUT, { ...options, dialect: DUCKDB_DIALECT });
+    expect(a.sql).toBe(b.sql);
+  });
+
+  it('sqlDepth counts what DuckDB counts: a nested SELECT 2, a parenthesis or CASE 1', async () => {
+    const db = await nodeDuckDb();
+    const nested = (n: number) =>
+      `SELECT x FROM ${'(SELECT x + 1 AS x FROM '.repeat(n)}(SELECT 1 AS x) AS t${') AS t'.repeat(n)}`;
+    // DuckDB refuses a depth above 1000; 495 nested SELECTs plan, 499 do not.
+    expect(sqlDepth(nested(495))).toBeLessThan(1000);
+    db.query(nested(495));
+    expect(sqlDepth(nested(499))).toBeGreaterThanOrEqual(998);
+    expect(() => db.query(nested(499))).toThrow(/expression depth/);
+    expect(sqlDepth(`SELECT ${'abs('.repeat(10)}1${')'.repeat(10)}`)).toBe(10);
+    expect(sqlDepth("SELECT CASE WHEN TRUE THEN CASE WHEN 'END(' = '' THEN 1 END END")).toBe(2);
+  });
+});
+
+describe('KNOWN BUG', () => {
+  /** Result of a constant formula on the one-row blank source: value text or Excel error. */
+  async function result(formula: string): Promise<string | null> {
+    const { table, warnings } = await (async () => {
+      const flow = buildFlow(
+        [
+          ['src', 'test.source', { name: 'src' }],
+          ['f', 'transform.formula', { columns: [{ key: 'r', formula }] }],
+        ],
+        [['src', 'f']],
+      );
+      const out = await runFlow(flow, {
+        src: { columns: [{ key: 'd', title: 'd', type: 'date' }], rows: [[null]] },
+      });
+      return { table: out.outputs['f']!['out']!, warnings: out.warnings };
+    })();
+    const error = warnings.find((w) => w.messageKey === 'formula.warning.rowErrors');
+    if (error !== undefined) return String(error.params['error']);
+    const v = table.get(0, 'r');
+    return v === null ? null : String(v);
+  }
 
   // Spec §12.2 "Ô trống" (blank = 0 as a number argument) and "theo Excel": Excel's WEEKDAY(0)
   // is 7 (serial 0 is a Saturday in the 1900 system); the engine reads serial 0 as 1899-12-31,
@@ -735,65 +891,4 @@ describe('KNOWN BUG', () => {
     expect(await result('=WEEKDAY([d])')).toBe('7');
     expect(await result('=WEEKDAY(1)')).toBe('1');
   });
-
-  // Spec §12.2: `^` with a constant integer exponent |n| ≤ 64 is exact, and only overflow is
-  // #NUM!. 10^-30 = 1e-30 rounds to 0 on 10 places, but 1 / 10^30 overflows on the way.
-  it.fails('10^-30 is 0 (rounded to 10 places), not #NUM!', async () => {
-    expect(await result('=10^-30')).toBe('0');
-  });
-
-  // Spec §12.2: a text that reads as a number is used as that number; beyond DECIMAL(38,10) a
-  // number is #NUM! (the constant =1e28 is #NUM!), but VALUE("1e28") gives #VALUE!.
-  it.fails('VALUE("1e28") overflows to #NUM! like the constant 1e28', async () => {
-    expect(await result('=1e28')).toBe('#NUM!');
-    expect(await result('=VALUE("1e28")')).toBe('#NUM!');
-  });
-
-  // compile.ts INT: `CAST(floor(x) AS DECIMAL(38,10))` is outside TRY; floor of a value in
-  // (-10^28, -10^28 + 1) is -10^28, which does not fit: the query fails instead of #NUM!.
-  it.fails('INT of a negative value just above -10^28 is #NUM!, not a DuckDB error', async () => {
-    await runs('=INT([n]-0.5)');
-  });
-
-  it.fails('INT(-9999999999999999999999999999.5) compiles to a query DuckDB can run', async () => {
-    await runs('=INT(-9999999999999999999999999999.5)');
-  });
-
-  // Accepted at design time (≤ 150 chained operations, < 2,000 characters, SQL < 4 MB), but each
-  // `^n` is several exact multiplications, each one more nested SELECT: DuckDB refuses the
-  // generated SQL ("Max expression depth limit of 1000 exceeded" or "Parser Error: memory
-  // exhausted"), the run fails with `duckdb.error.queryFailed`.
-  it.fails('a chain of 50 `^64` (153 characters) runs on DuckDB', async () => {
-    await runs(`=[n]${'^64'.repeat(50)}`);
-  });
-
-  it.fails('a chain of 150 `^3` runs on DuckDB', async () => {
-    await runs(`=[n]${'^3'.repeat(150)}`);
-  });
-
-  // Accepted at design time (each formula 30 operations, SQL ≈ 1.3 MB < the 4 MB `tooComplex`
-  // net), but planning the nested projections exhausts DuckDB's memory (3.1 GiB under Node):
-  // the run fails with `duckdb.error.queryFailed`. 10 × 50 `/` and 2 × 150 `/` fail the same way.
-  it.fails(
-    '50 columns of 30 chained multiplications run',
-    async () => {
-      const db = await nodeDuckDb();
-      db.exec(FZ_TABLE);
-      const formula = `=[n]${'*[n]'.repeat(30)}`;
-      const columns = Array.from({ length: 50 }, (_, i) => ({
-        key: `r${i}`,
-        formula,
-        type: 'auto' as const,
-        onError: 'blank' as const,
-      }));
-      const c = compileFormula(columns, INPUT, {
-        dialect: DUCKDB_DIALECT,
-        from: 'fz',
-        params: PARAM_DEFS,
-      });
-      expect(c.sql.length).toBeLessThan(4_000_000);
-      db.query(c.sql, c.params);
-    },
-    600_000,
-  );
 });

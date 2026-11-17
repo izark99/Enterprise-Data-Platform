@@ -43,8 +43,19 @@ const NA = '4';
 
 /** Longest chain of operations in one node (spec §12.2 `tooComplex`). */
 export const MAX_CHAIN = 150;
-/** Safety net behind `MAX_CHAIN`: generated SQL longer than this is `tooComplex` too. */
-const MAX_SQL_LENGTH = 4_000_000;
+/**
+ * Budgets of the generated SQL beyond which a node is `tooComplex` at design time, so every
+ * accepted node plans safely in DuckDB (measured on the Node bindings of the same
+ * `duckdb-eh.wasm`, T-R1-09 verifier round; numbers in docs):
+ * - `MAX_SQL_DEPTH`: DuckDB refuses an expression depth above 1000 ("Max expression depth"); a
+ *   nested `SELECT` counts 2, a parenthesis or `CASE` 1 (`sqlDepth`). 800 leaves a margin.
+ * - `MAX_SQL_LENGTH`: planning memory grows with the SQL size; the smallest plan that ran out of
+ *   memory was 2.56 MB, the largest one measured to plan was 3.2 MB of other operators.
+ * - `MAX_PROJECTED`: planning time grows with the items of all projection lists.
+ */
+export const MAX_SQL_DEPTH = 800;
+export const MAX_SQL_LENGTH = 1_500_000;
+export const MAX_PROJECTED = 15_000;
 
 const DEC = 'DECIMAL(38,10)';
 const FRAC = 'DECIMAL(10,10)';
@@ -126,6 +137,10 @@ export interface CompiledFormula {
   readonly params: readonly SqlValue[];
   /** `output` plus one `integer` column per formula that can fail (`errorKey`). */
   readonly resultColumns: Schema;
+  /** Nested `SELECT`s of `sql` (bounded by `MAX_NESTING`). */
+  readonly nesting: number;
+  /** Items of all projection lists of `sql` (bounded by `MAX_PROJECTED`). */
+  readonly projected: number;
 }
 
 export interface CompileOptions {
@@ -203,9 +218,14 @@ function columnError(
 class Compiler {
   private readonly defs: Def[] = [];
   private readonly levels = new Map<string, number>();
+  private readonly seen = new Map<string, { name: string; lvl: number }>();
   private readonly values: SqlValue[] = [];
   private readonly hidden: RegExp;
   mixed = false;
+  /** Nested `SELECT`s of the assembled SQL. */
+  nesting = 0;
+  /** Items of every projection list of the assembled SQL. */
+  projected = 0;
 
   constructor(
     private readonly d: SqlDialect,
@@ -226,16 +246,24 @@ class Compiler {
     return `${MARK}${this.values.length - 1}${MARK}`;
   }
 
-  /** `sql` computed once into a hidden column at level `lvl + 1`. */
-  hoist(sql: string, lvl: number): { name: string; lvl: number } {
-    // The level is checked against the hidden columns the SQL reads: one level above the deepest.
-    let deepest = lvl;
+  /**
+   * `sql` computed once into a hidden column, one level above the deepest hidden column it reads
+   * (the level comes from the SQL itself, so nothing waits a level for an error column it does
+   * not read). The same SQL without bound values is computed once.
+   */
+  hoist(sql: string): { name: string; lvl: number } {
+    const bound = sql.includes(MARK);
+    const known = bound ? undefined : this.seen.get(sql);
+    if (known !== undefined) return known;
+    let deepest = 0;
     for (const m of sql.match(this.hidden) ?? [])
       deepest = Math.max(deepest, this.levels.get(m) ?? 0);
     const name = this.d.aux(`f${this.defs.length}`);
     this.defs.push({ name, sql, lvl: deepest + 1 });
     this.levels.set(name, deepest + 1);
-    return { name, lvl: deepest + 1 };
+    const out = { name, lvl: deepest + 1 };
+    if (!bound) this.seen.set(sql, out);
+    return out;
   }
 
   private isName(sql: string): boolean {
@@ -247,11 +275,11 @@ class Compiler {
   /** `x` with value and error in hidden columns, so it can be repeated in SQL. */
   atom(x: Ex): Ex {
     if (x.atom) return x;
-    const v = this.isName(x.v) ? { name: x.v, lvl: x.lvl } : this.hoist(x.v, x.lvl);
+    const v = this.isName(x.v) ? { name: x.v, lvl: x.lvl } : this.hoist(x.v);
     const e =
       x.e === null || /^\d$/.test(x.e) || this.isName(x.e)
         ? { name: x.e, lvl: 0 }
-        : this.hoist(x.e, x.lvl);
+        : this.hoist(x.e);
     return { ...x, v: v.name, e: e.name, atom: true, lvl: Math.max(v.lvl, e.lvl, x.lvl) };
   }
 
@@ -270,7 +298,7 @@ class Compiler {
 
   /** `sql` hoisted; its `NULL` is the error `code` (overflow, out of range, not found…). */
   private checked(t: FT, sql: string, deps: readonly Ex[], code: string, pre: string[] = []) {
-    const h = this.hoist(sql, lvlOf(...deps));
+    const h = this.hoist(sql);
     const e = errOf(
       ...deps.map((x) => x.e),
       ...pre,
@@ -318,9 +346,13 @@ class Compiler {
       needed = before;
     }
     let sql = `SELECT ${keep.join(', ')} FROM ${from}`;
+    this.nesting = 2;
+    this.projected = keep.length + select.length;
     for (let k = 1; k <= top; k++) {
       const level = levels[k]!;
       if (level.defs.length === 0) continue;
+      this.nesting++;
+      this.projected += keep.length + level.through.length + level.defs.length;
       const list = [
         ...keep,
         ...level.through,
@@ -373,14 +405,16 @@ class Compiler {
       }
       case 'string': {
         const s = this.atom(x);
-        const p = this.hoist(
-          `CASE WHEN regexp_full_match(${s.v}, ${NUMBER_TEXT}) THEN TRY_CAST(trim(${s.v}) AS ${DEC}) END`,
-          s.lvl,
-        );
+        const m = this.hoist(`regexp_full_match(${s.v}, ${NUMBER_TEXT})`);
+        const p = this.hoist(`CASE WHEN ${m.name} THEN TRY_CAST(trim(${s.v}) AS ${DEC}) END`);
+        // Reads as a number but does not fit DECIMAL(38,10) → #NUM!; not a number → #VALUE!.
         return {
           t: 'number',
           v: `coalesce(${p.name}, CAST(0 AS ${DEC}))`,
-          e: errOf(s.e, `CASE WHEN ${p.name} IS NULL AND NOT ${this.isNull(s)} THEN ${VALUE} END`),
+          e: errOf(
+            s.e,
+            `CASE WHEN ${p.name} IS NULL AND NOT ${this.isNull(s)} THEN CASE WHEN ${m.name} THEN ${NUM} ELSE ${VALUE} END END`,
+          ),
           blank: false,
           ref: false,
           atom: false,
@@ -423,7 +457,6 @@ class Compiler {
         const s = this.atom(x);
         const b = this.hoist(
           `CASE upper(trim(${s.v})) WHEN 'TRUE' THEN TRUE WHEN 'FALSE' THEN FALSE END`,
-          s.lvl,
         );
         return {
           t: 'boolean',
@@ -439,17 +472,25 @@ class Compiler {
   }
 
   /** A date argument: a date, or a serial number (0 … 2958465). */
-  date(x: Ex): Ex {
+  date(x: Ex, result = false): Ex {
     if (x.t === 'date') {
       return x.blank ? this.ex('date', `coalesce(${x.v}, ${DAY_ZERO})`, [x]) : x;
     }
     const n = this.atom(this.num(x));
+    // An argument may be serial 0 (a blank date, Excel's 1900-01-00); a date result may not:
+    // spec §12.2, a result outside 1900-01-01 … 9999-12-31 is #NUM!.
     return this.checked(
       'date',
-      `CASE WHEN ${n.v} >= 0 AND ${n.v} < 2958466 THEN ${DAY_ZERO} + CAST(floor(greatest(least(${n.v}, 2958466), 0)) AS INTEGER) - CASE WHEN ${n.v} >= 61 THEN 1 ELSE 0 END END`,
+      `CASE WHEN ${n.v} >= ${result ? 1 : 0} AND ${n.v} < 2958466 THEN ${DAY_ZERO} + CAST(floor(greatest(least(${n.v}, 2958466), 0)) AS INTEGER) - CASE WHEN ${n.v} >= 61 THEN 1 ELSE 0 END END`,
       [n],
       NUM,
     );
+  }
+
+  /** `INT`: floor; just above −10^28 the floor does not fit `DECIMAL(38,10)` → `#NUM!`. */
+  intPart(a: Ex): Ex {
+    const x = this.num(a);
+    return this.checked('number', `TRY(CAST(floor(${x.v}) AS ${DEC}))`, [x], NUM);
   }
 
   /** An integer argument (truncated toward zero like Excel), clamped to ±`limit`, as BIGINT. */
@@ -468,7 +509,7 @@ class Compiler {
 
   /** A date result: `#NUM!` outside 1900-01-01 … 9999-12-31 (spec §12.2). */
   private dateResult(sql: string, deps: readonly Ex[]): Ex {
-    const h = this.hoist(`TRY(CAST(${sql} AS DATE))`, lvlOf(...deps));
+    const h = this.hoist(`TRY(CAST(${sql} AS DATE))`);
     return {
       t: 'date',
       v: h.name,
@@ -522,8 +563,8 @@ class Compiler {
   div(a: Ex, b: Ex): Ex {
     const x = this.atom(this.num(a));
     const y = this.atom(this.num(b));
-    const A = this.hoist(this.scaled(x.v), x.lvl).name;
-    const B = this.hoist(this.scaled(y.v), y.lvl).name;
+    const A = this.hoist(this.scaled(x.v)).name;
+    const B = this.hoist(this.scaled(y.v)).name;
     // |A| < 10^28: A × 10^10 fits HUGEINT; else the integer part first (|B| < 10^28); else
     // (|a|, |b| ≥ 10^18) divide by the integer part of b.
     const s =
@@ -531,8 +572,7 @@ class Compiler {
       `WHEN abs(${A}) < ${E28} THEN ${this.roundDiv(`(${A} * ${E10})`, B)} ` +
       `WHEN abs(${B}) < ${E28} THEN (${A} // ${B}) * ${E10} + ${this.roundDiv(`((${A} % ${B}) * ${E10})`, B)} ` +
       `ELSE ${this.roundDiv(A, `(${B} // ${E10})`)} END`;
-    const lvl = Math.max(x.lvl, y.lvl) + 1;
-    const q = this.hoist(this.unscaled(`TRY(${s})`), lvl);
+    const q = this.hoist(this.unscaled(`TRY(${s})`));
     return {
       t: 'number',
       v: q.name,
@@ -568,7 +608,20 @@ class Compiler {
         if (m % 2 === 1) result = result === null ? square : this.mul(result, square);
         if (m > 1) square = this.mul(square, square);
       }
-      return k < 0 ? this.div(this.literal('number', `CAST(1 AS ${DEC})`), result!) : result!;
+      if (k > 0) return result!;
+      // 1 / x^|k|: when x^|k| overflows (x ≠ 0) the exact result rounds to 0 on 10 places; only
+      // an overflow of the result itself is #NUM! (spec §12.2).
+      const p = this.atom(result!);
+      const q = this.div(this.literal('number', `CAST(1 AS ${DEC})`), { ...p, e: base.e });
+      return {
+        t: 'number',
+        v: `CASE WHEN ${p.v} IS NULL THEN CAST(0 AS ${DEC}) ELSE ${q.v} END`,
+        e: `CASE WHEN ${p.v} IS NULL THEN ${base.e ?? 'NULL'} ELSE ${q.e ?? 'NULL'} END`,
+        blank: false,
+        ref: false,
+        atom: false,
+        lvl: Math.max(p.lvl, q.lvl),
+      };
     }
     const exp = this.atom(this.num(b));
     const zeroNeg = `${base.v} = 0 AND ${exp.v} < 0`;
@@ -593,7 +646,7 @@ class Compiler {
       nums.map((t) => t.x),
       NUM,
     );
-    return plusDates === 1 && minusDates === 0 ? this.date(total) : total;
+    return plusDates === 1 && minusDates === 0 ? this.date(total, true) : total;
   }
 
   // ---- comparison (Excel: numbers < text < logicals; text without case) -----------------------
@@ -709,7 +762,7 @@ class Compiler {
   iferror(x: Ex, alt: Ex): Ex {
     if (x.e === null) return x;
     const [vx, va] = this.unify([x, alt]) as [Ex, Ex];
-    const err = this.hoist(vx.e!, vx.lvl);
+    const err = this.hoist(vx.e!);
     return {
       t: vx.t,
       v: `CASE WHEN ${err.name} IS NULL THEN ${vx.v} ELSE ${va.v} END`,
@@ -791,11 +844,8 @@ class Compiler {
   round(mode: 'ROUND' | 'ROUNDUP' | 'ROUNDDOWN', a: Ex, b: Ex): Ex {
     const x = this.atom(this.num(a));
     const n = this.atom(this.int(b));
-    const S = this.hoist(this.scaled(x.v), x.lvl);
-    const p = this.hoist(
-      `CASE WHEN ${n.v} < 10 AND ${n.v} >= -28 THEN ${POWERS}[10 - ${n.v}] END`,
-      n.lvl,
-    );
+    const S = this.hoist(this.scaled(x.v));
+    const p = this.hoist(`CASE WHEN ${n.v} < 10 AND ${n.v} >= -28 THEN ${POWERS}[10 - ${n.v}] END`);
     const s = S.name;
     const q = `${s} // ${p.name}`;
     const r = `${s} % ${p.name}`;
@@ -817,7 +867,7 @@ class Compiler {
   mod(a: Ex, b: Ex): Ex {
     const x = this.num(a);
     const y = this.atom(this.num(b));
-    const r = this.hoist(`(${x.v} % NULLIF(${y.v}, 0))`, lvlOf(x, y));
+    const r = this.hoist(`(${x.v} % NULLIF(${y.v}, 0))`);
     const v = `CASE WHEN ${r.name} <> 0 AND (${r.name} < 0) <> (${y.v} < 0) THEN ${r.name} + ${y.v} ELSE ${r.name} END`;
     return {
       ...this.ex('number', v, [x, y], [`CASE WHEN ${y.v} = 0 THEN ${DIV0} END`]),
@@ -845,7 +895,7 @@ class Compiler {
     if (fn === 'FIND') {
       pos = `CASE WHEN ${ok} THEN nullif(strpos(${rest}, ${f.v}), 0) END`;
     } else {
-      const pat = this.hoist(this.wildcard(f.v), f.lvl).name;
+      const pat = this.hoist(this.wildcard(f.v)).name;
       pos =
         `TRY(CASE WHEN ${ok} AND regexp_matches(${rest}, '(?is)' || ${pat}) THEN ` +
         `length(regexp_extract(${rest}, '(?is)^(.*?)(?:' || ${pat} || ')', 1)) + 1 END)`;
@@ -865,14 +915,11 @@ class Compiler {
       );
     }
     const k = this.atom(this.int(kx, MAX_LEN));
-    const lvl = lvlOf(s, o, nw, k);
     const parts = this.hoist(
       `CASE WHEN ${o.v} <> '' AND ${k.v} >= 1 THEN string_split(${s.v}, ${o.v}) END`,
-      lvl,
     );
     const pos = this.hoist(
       `CAST(list_sum(list_transform(${parts.name}[1:${k.v}], hrfx -> length(hrfx))) AS BIGINT) + (${k.v} - 1) * length(${o.v}) + 1`,
-      parts.lvl,
     );
     const v =
       `CASE WHEN ${k.v} < 1 THEN NULL WHEN ${o.v} = '' OR len(${parts.name}) - 1 < ${k.v} THEN ${s.v} ` +
@@ -885,7 +932,7 @@ class Compiler {
 
   proper(x: Ex): Ex {
     const s = this.str(x);
-    const chars = this.hoist(`string_split(lower(${s.v}), '')`, s.lvl);
+    const chars = this.hoist(`string_split(lower(${s.v}), '')`);
     const c = chars.name;
     return {
       ...this.ex(
@@ -935,11 +982,9 @@ class Compiler {
     const lvl = lvlOf(s, e, u);
     const months = this.hoist(
       `(year(${e.v}) * 12 + month(${e.v})) - (year(${s.v}) * 12 + month(${s.v})) - CASE WHEN day(${e.v}) < day(${s.v}) THEN 1 ELSE 0 END`,
-      lvl,
     ).name;
     const sy = this.hoist(
       `TRY(CAST(${s.v} + to_years(CAST(year(${e.v}) - year(${s.v}) AS INTEGER)) AS DATE))`,
-      lvl,
     ).name;
     const md =
       `CASE WHEN day(${e.v}) >= day(${s.v}) THEN day(${e.v}) - day(${s.v}) ` +
@@ -951,7 +996,7 @@ class Compiler {
       `CASE WHEN ${s.v} > ${e.v} THEN NULL ELSE CAST(CASE ${u.v} WHEN 'Y' THEN ${months} // 12 WHEN 'M' THEN ${months} ` +
       `WHEN 'D' THEN date_diff('day', ${s.v}, ${e.v}) WHEN 'YM' THEN ${months} % 12 WHEN 'MD' THEN ${md} ` +
       `WHEN 'YD' THEN ${yd} END AS ${DEC}) END`;
-    return this.checked('number', sql, [s, e, u, { ...s, e: null, lvl: lvl + 1 }], NUM);
+    return this.checked('number', `TRY(${sql})`, [s, e, u, { ...s, e: null, lvl: lvl + 1 }], NUM);
   }
 
   weekday(dx: Ex, tx: Ex | undefined): Ex {
@@ -1202,10 +1247,8 @@ class FormulaCompiler {
       case 'ROUNDUP':
       case 'ROUNDDOWN':
         return c.round(node.name, arg(0), arg(1));
-      case 'INT': {
-        const x = c.num(arg(0));
-        return { ...x, v: `CAST(floor(${x.v}) AS ${DEC})`, atom: false, blank: false, ref: false };
-      }
+      case 'INT':
+        return c.intPart(arg(0));
       case 'ABS': {
         const x = c.num(arg(0));
         return { ...x, v: `abs(${x.v})`, atom: false, blank: false, ref: false };
@@ -1399,6 +1442,47 @@ function finalize(c: Compiler, x: Ex, type: DataType): Ex {
   }
 }
 
+/**
+ * Expression depth of generated SQL as DuckDB's parser counts it, at its deepest point: open
+ * parentheses, plus one more for each one that opens a `SELECT`, plus open `CASE`s. String
+ * literals and quoted names are skipped.
+ */
+export function sqlDepth(sql: string): number {
+  let parens = 0;
+  let cases = 0;
+  let selects = 0;
+  const stack: boolean[] = [];
+  let max = 0;
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i]!;
+    if (ch === "'" || ch === '"') {
+      const end = sql.indexOf(ch, i + 1);
+      i = end < 0 ? sql.length : end;
+      continue;
+    }
+    if (ch === '(') {
+      const select = sql.startsWith('SELECT', i + 1);
+      stack.push(select);
+      parens++;
+      if (select) selects++;
+    } else if (ch === ')') {
+      if (stack.pop() === true) selects--;
+      parens--;
+    } else if (ch === 'C' && sql.startsWith('CASE ', i) && !/\w/.test(sql[i - 1] ?? ' ')) {
+      cases++;
+    } else if (
+      ch === 'E' &&
+      sql.startsWith('END', i) &&
+      !/\w/.test(sql[i - 1] ?? ' ') &&
+      !/\w/.test(sql[i + 3] ?? ' ')
+    ) {
+      cases--;
+    }
+    max = Math.max(max, parens + selects + cases);
+  }
+  return max;
+}
+
 /** Key of a hidden column not used by any output column. */
 function freshKey(base: string, taken: Set<string>): string {
   let key = base;
@@ -1486,10 +1570,10 @@ export function compileFormula(
     let value: { name: string; lvl: number };
     let error: string | null = null;
     if (fin.e === null) {
-      value = c.hoist(fin.v, fin.lvl);
+      value = c.hoist(fin.v);
     } else {
-      const e = c.hoist(fin.e, fin.lvl);
-      value = c.hoist(`CASE WHEN ${e.name} IS NULL THEN ${fin.v} END`, Math.max(e.lvl, fin.lvl));
+      const e = c.hoist(fin.e);
+      value = c.hoist(`CASE WHEN ${e.name} IS NULL THEN ${fin.v} END`);
       error = e.name;
     }
     const prev = output.findIndex((o) => o.key === col.key);
@@ -1525,44 +1609,87 @@ export function compileFormula(
   });
 
   const taken = new Set(output.map((o) => o.key));
-  const select = output.map((o) => {
-    const v = values.get(o.key);
-    return v === undefined ? d.ident(o.key) : `${d.cast(v, o.type)} AS ${d.ident(o.key)}`;
-  });
-  select.push(d.ord);
-  const resultColumns: ColumnDef[] = [...output];
-  const withKeys = compiled.map((col) => {
-    const err = errors.get(col.key);
-    if (err === undefined) return col;
-    const errorKey = freshKey(`_err_${col.index}`, taken);
-    select.push(`${d.cast(err, 'integer')} AS ${d.ident(errorKey)}`);
-    resultColumns.push({ key: errorKey, title: errorKey, type: 'integer' });
-    return { ...col, errorKey };
-  });
   const keep = [...input.map((col) => d.ident(col.key)), d.ord];
-  const done = c.finish(c.assemble(options.from, keep, select));
-  if (done.sql.length > MAX_SQL_LENGTH) {
-    const last = columns.length - 1;
+  const errorKeys = new Map<string, string>();
+  for (const col of compiled) {
+    if (errors.has(col.key)) errorKeys.set(col.key, freshKey(`_err_${col.index}`, taken));
+  }
+  /** The SELECT of the output with the formula columns of `upTo` (all by default). */
+  const build = (upTo: number) => {
+    const shown = new Set(columns.slice(0, upTo).map((col) => col.key));
+    const select = output.map((o) => {
+      const v = shown.has(o.key) ? values.get(o.key) : undefined;
+      return v === undefined ? d.ident(o.key) : `${d.cast(v, o.type)} AS ${d.ident(o.key)}`;
+    });
+    select.push(d.ord);
+    for (const col of compiled.slice(0, upTo)) {
+      const err = errors.get(col.key);
+      if (err !== undefined) {
+        select.push(`${d.cast(err, 'integer')} AS ${d.ident(errorKeys.get(col.key)!)}`);
+      }
+    }
+    return c.finish(c.assemble(options.from, keep, select));
+  };
+  const fits = (sql: string): boolean =>
+    sql.length <= MAX_SQL_LENGTH && c.projected <= MAX_PROJECTED && sqlDepth(sql) <= MAX_SQL_DEPTH;
+  const done = build(columns.length);
+  if (!fits(done.sql)) {
+    // Error path only: the first column whose SQL no longer fits is the one to simplify.
+    let at = columns.length - 1;
+    for (let k = 1; k < columns.length; k++) {
+      if (!fits(build(k).sql)) {
+        at = k - 1;
+        break;
+      }
+    }
     throw columnError(
-      last,
-      columns[last]!.key,
+      at,
+      columns[at]!.key,
       'formula',
       new EngineError('formula.error.tooComplex', { max: MAX_CHAIN }),
     );
   }
-  return { output, columns: withKeys, sql: done.sql, params: done.params, resultColumns };
+  const resultColumns: ColumnDef[] = [...output];
+  const withKeys = compiled.map((col) => {
+    const errorKey = errorKeys.get(col.key);
+    if (errorKey === undefined) return col;
+    resultColumns.push({ key: errorKey, title: errorKey, type: 'integer' });
+    return { ...col, errorKey };
+  });
+  return {
+    output,
+    columns: withKeys,
+    sql: done.sql,
+    params: done.params,
+    resultColumns,
+    nesting: c.nesting,
+    projected: c.projected,
+  };
 }
 
+/** DuckDB types of the engine types, as `SqlDialect.cast` of the DuckDB runtime writes them. */
+const DESIGN_TYPES: Readonly<Record<DataType, string>> = {
+  string: 'VARCHAR',
+  integer: 'BIGINT',
+  decimal: DEC,
+  boolean: 'BOOLEAN',
+  date: 'DATE',
+  datetime: 'TIMESTAMP',
+};
+
 /**
- * Dialect for design-time compilation (schema inference, type checks): the SQL built with it is
- * thrown away, never run.
+ * Dialect for design-time compilation (schema inference, type checks, the `tooComplex` budgets):
+ * the SQL built with it is never run, but it has the same text as with the DuckDB runtime's
+ * dialect (`engine/duckdb/scope.ts`, equality tested), so the budgets give the same answer at
+ * design time and at run time.
  */
 export const DESIGN_DIALECT: SqlDialect = {
   ident: (key) => `"${key}"`,
   ord: '"hr$ord"',
   aux: (name) => `"hr$${name}"`,
   normKey: (expr) => `hrflow_norm_key(${expr})`,
-  cast: (expr) => expr,
-  isBlank: (expr) => `(${expr} IS NULL)`,
-  param: '?',
+  cast: (expr, type) => `CAST(${expr} AS ${DESIGN_TYPES[type]})`,
+  isBlank: (expr, type) =>
+    type === 'string' ? `(hrflow_norm_key(${expr}) = '')` : `(${expr} IS NULL)`,
+  param: 'CAST(? AS VARCHAR)',
 };
