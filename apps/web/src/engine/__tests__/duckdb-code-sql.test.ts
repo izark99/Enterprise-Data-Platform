@@ -91,7 +91,23 @@ describe('replaceParams (the `$key` lexer)', () => {
       keys: [],
       commentDepth: 0,
       parenDepth: 0,
+      commentCount: 0,
+      withDepth: 0,
+      cteCount: 0,
     });
+  });
+
+  it('counts comments, nested WITH and CTE definitions outside strings', () => {
+    const r = replaceParams(
+      'WITH a AS (SELECT 1), b AS MATERIALIZED (WITH c AS NOT MATERIALIZED (SELECT 2) SELECT * FROM c)' +
+        " SELECT 'WITH x AS (' AS s, CAST(1 AS INTEGER) AS i /* a */ /* b /* c */ */ -- d\n FROM a",
+    );
+    expect(r.cteCount).toBe(3);
+    expect(r.withDepth).toBe(2);
+    expect(r.commentCount).toBe(4);
+    expect(
+      replaceParams('SELECT (SELECT 1) AS a, (WITH c AS (SELECT 1) SELECT 1) AS b').withDepth,
+    ).toBe(1);
   });
 
   it('measures parenthesis nesting outside strings and comments; ends -- at \\r; $ after a name', () => {

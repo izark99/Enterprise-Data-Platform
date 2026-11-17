@@ -225,12 +225,26 @@ async function open(onProgress?: (p: LoadProgress) => void): Promise<DuckDb> {
 }
 
 let pending: Promise<DuckDb> | null = null;
+let current: DuckDb | null = null;
 
-/** The worker's one DuckDB, loaded on first use; a failed load can be retried by the next run. */
+/**
+ * The worker's one DuckDB, loaded on first use; a failed load can be retried by the next run. A
+ * database broken by a WebAssembly trap is replaced by a new one (`DuckDb.broken`).
+ */
 export function loadDuckDb(onProgress?: (p: LoadProgress) => void): Promise<DuckDb> {
-  pending ??= open(onProgress).catch((err: unknown) => {
+  if (current?.broken) {
+    current = null;
     pending = null;
-    throw err;
-  });
+  }
+  pending ??= open(onProgress).then(
+    (db) => {
+      current = db;
+      return db;
+    },
+    (err: unknown) => {
+      pending = null;
+      throw err;
+    },
+  );
   return pending;
 }

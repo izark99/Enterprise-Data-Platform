@@ -31,10 +31,28 @@ export interface DuckDbOptions {
   readonly jsonExtensionUrl: string | null;
 }
 
+/** A WebAssembly trap, as opposed to an SQL error DuckDB reports and survives. */
+function isWasmTrap(err: unknown, message: string): boolean {
+  const trap = typeof WebAssembly !== 'undefined' && err instanceof WebAssembly.RuntimeError;
+  return (
+    trap || /memory access out of bounds|table index is out of bounds|unreachable/i.test(message)
+  );
+}
+
 export class DuckDb {
   private readonly conn: Connection;
   /** The `json` extension is loaded (`json_serialize_sql` is available). */
   readonly parser: boolean;
+  private brokenByTrap = false;
+
+  /**
+   * A WebAssembly trap happened inside DuckDB (e.g. "memory access out of bounds"): its memory may
+   * be corrupt and every later statement can fail. The loader then opens a new database on the
+   * next use (verifier T-R1-08, third round; owner 1A).
+   */
+  get broken(): boolean {
+    return this.brokenByTrap;
+  }
 
   /**
    * Opens `:memory:` (no OPFS, no file), loads the `json` extension when given, then applies and
@@ -57,7 +75,9 @@ export class DuckDb {
     try {
       return this.conn.useUnsafe(work);
     } catch (err) {
-      throw new DuckDbError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (isWasmTrap(err, message)) this.brokenByTrap = true;
+      throw new DuckDbError(message);
     }
   }
 

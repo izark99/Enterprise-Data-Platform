@@ -40,10 +40,19 @@ import {
 
 const recorded: { queries: string[]; created: number } = { queries: [], created: 0 };
 let dbPending: Promise<DuckDb> | null = null;
+let dbCurrent: DuckDb | null = null;
 
-/** The worker's DuckDB, with its statements recorded (the same instance `loadDuckDb` returns). */
+/**
+ * The worker's DuckDB, with its statements recorded (the same instance `loadDuckDb` returns). A
+ * database broken by a WebAssembly trap is dropped, and `loadDuckDb` opens a new one.
+ */
 function database(): Promise<DuckDb> {
+  if (dbCurrent?.broken) {
+    dbCurrent = null;
+    dbPending = null;
+  }
   dbPending ??= loadDuckDb().then((db) => {
+    dbCurrent = db;
     const query = db.query.bind(db);
     const exec = db.exec.bind(db);
     db.query = (sql, params) => {

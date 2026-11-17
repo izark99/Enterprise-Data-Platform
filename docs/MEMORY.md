@@ -242,6 +242,8 @@
 
 ## Kỹ thuật & tổ chức
 
+2026-11-17 07:45 - T-R1-08 sau verifier vòng 3 (Harold trả lời 1A, 2A): (1) thêm giới hạn trước khi gọi parser của DuckDB: tối đa 256 comment, `WITH` lồng tối đa 4 tầng, tối đa 64 CTE (vượt → `sql.error.syntax`); DuckDB-WASM bị trap thì coi là hỏng và mở database mới ở lần dùng sau; đóng T-R1-08 không cần verifier vòng 4, lần verify cuối P1 (T-R1-10) sẽ fuzz lại; (2) chặn các hàm scalar đọc cấu hình/trạng thái của DuckDB (`current_setting`, `current_query`, `getvariable`, `getenv`, `version`, …) → `sql.error.forbidden`.
+
 2026-11-16 21:56 - T-R1-08 sau verifier vòng 2 (Harold trả lời 1A, 2A): (1) sửa 3 lỗi còn lại của guard `code.sql` (nhánh anchor của CTE `RECURSIVE` không thấy tên CTE; so tên bảng/CTE chỉ đổi chữ hoa ASCII, tên có ký tự ngoài ASCII bị từ chối; bộ quét kết thúc `--` ở `\r`/`\n` và coi `$` sau ký tự tên là một phần của tên), đặt tên bảng tạm có hậu tố ngẫu nhiên 16 ký tự hex, rồi cho verifier kiểm vòng 3 (ngoại lệ của giới hạn 2 vòng, chỉ cho task này); (2) giới hạn độ lồng ngoặc 16 tầng trước khi gọi parser của DuckDB (vượt → `sql.error.syntax`).
 
 2026-11-16 18:26 - T-R1-08 (Harold trả lời 1C, 2A): (1) tạo sớm `src/engine/protocol.ts` (public surface): chứa message của trang harness E2E và re-export tối thiểu các phần engine mà worker của harness cần; `src/e2e-engine/` có vùng lint riêng, chỉ import public surface của engine; T-R1-10 thay các re-export này bằng message thật của worker; (2) xác nhận các lựa chọn của T-R1-08 ghi ở `docs/redesign/03-domain-and-data-model.md` §4.9 (D-03-9) và 02 §1.1: URL extension qua define riêng, `describe` dùng bảng tạm rỗng, bỏ `;` cuối, thao tác `exec`/`scalar` và ghi câu SQL chỉ có ở harness, test cần parser đặt ở `e2e/engine/`.

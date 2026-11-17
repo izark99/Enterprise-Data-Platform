@@ -27,6 +27,31 @@ const PLACEHOLDER = 'CAST(? AS VARCHAR)';
 const MAX_COMMENT_DEPTH = 32;
 /** Deepest parenthesis nesting accepted (owner 2A of T-R1-08, MEMORY 2026-11-16). */
 const MAX_PAREN_DEPTH = 16;
+/** Most comments, deepest `WITH` nesting and most CTEs accepted (owner 1A of T-R1-08, third round). */
+const MAX_COMMENTS = 256;
+const MAX_WITH_DEPTH = 4;
+const MAX_CTES = 64;
+/**
+ * Scalar functions that read DuckDB's own state or configuration, not the input views (owner 2A of
+ * T-R1-08, third round); refused with `sql.error.forbidden`. Compared ASCII-folded.
+ */
+const FORBIDDEN_FUNCTIONS = new Set([
+  'current_setting',
+  'current_query',
+  'getvariable',
+  'getenv',
+  'current_database',
+  'current_catalog',
+  'current_schema',
+  'current_schemas',
+  'current_user',
+  'current_role',
+  'session_user',
+  'user',
+  'version',
+  'txid_current',
+  'in_search_path',
+]);
 /** DuckDB's refusal of a statement that is not a query (`json_serialize_sql`). */
 const NOT_SELECT = /^(Only SELECT statements|A CTE needs a SELECT)/;
 
@@ -121,6 +146,10 @@ function checkTables(value: Json, views: ReadonlySet<string>, scope: ReadonlySet
   if (!isObject(value)) return;
   const type = value['type'];
   if (type === 'TABLE_FUNCTION' || type === 'SHOW_REF') throw fail('sql.error.forbidden');
+  if (value['class'] === 'FUNCTION' && typeof value['function_name'] === 'string') {
+    const fn = foldName(value['function_name']);
+    if (fn === null || FORBIDDEN_FUNCTIONS.has(fn)) throw fail('sql.error.forbidden');
+  }
   if (type === 'BASE_TABLE') {
     const qualified = Boolean(value['schema_name']) || Boolean(value['catalog_name']);
     const name = typeof value['table_name'] === 'string' ? foldName(value['table_name']) : null;
@@ -145,6 +174,15 @@ function checkTables(value: Json, views: ReadonlySet<string>, scope: ReadonlySet
   for (const v of Object.values(value)) checkTables(v, views, scope);
 }
 
+/** CTEs defined anywhere in the statement (`MAX_CTES`, checked on the AST as well). */
+function countCtes(value: Json): number {
+  if (Array.isArray(value)) return value.reduce<number>((sum, v) => sum + countCtes(v), 0);
+  if (!isObject(value)) return 0;
+  let total = ctesOf(value).length;
+  for (const v of Object.values(value)) total += countCtes(v);
+  return total;
+}
+
 function hasOrderBy(node: Json): boolean {
   if (!isObject(node) || !Array.isArray(node['modifiers'])) return false;
   return node['modifiers'].some((m) => isObject(m) && m['type'] === 'ORDER_MODIFIER');
@@ -166,6 +204,12 @@ export interface ReplacedParams {
   readonly commentDepth: number;
   /** Deepest parenthesis nesting outside strings, names and comments. */
   readonly parenDepth: number;
+  /** Comments (`--` lines and every `/*`, nested ones included). */
+  readonly commentCount: number;
+  /** Deepest nesting of `WITH` clauses (a `WITH` inside a parenthesis of another one). */
+  readonly withDepth: number;
+  /** CTE definitions seen as `AS (` / `AS [NOT] MATERIALIZED (` outside strings and comments. */
+  readonly cteCount: number;
 }
 
 /**
@@ -180,6 +224,13 @@ export function replaceParams(sql: string): ReplacedParams {
   let commentDepth = 0;
   let parenDepth = 0;
   let depth = 0;
+  let commentCount = 0;
+  let withDepth = 0;
+  let cteCount = 0;
+  /** Per open parenthesis level: whether a `WITH` appeared at that level. */
+  const withAt: boolean[] = [false];
+  /** After `AS` (and `NOT` / `MATERIALIZED`): the next `(` opens a CTE body. */
+  let afterAs = false;
   let out = '';
   let i = 0;
   const n = sql.length;
@@ -197,6 +248,7 @@ export function replaceParams(sql: string): ReplacedParams {
       if (ch === ';') semicolons.push(out.length);
       else semicolons = [];
     }
+    if (comment) commentCount += 1;
     if (ch === "'" || ch === '"') {
       let j = i + 1;
       while (j < n && !(sql[j] === ch && sql[j + 1] !== ch)) j += sql[j] === ch ? 2 : 1;
@@ -211,6 +263,7 @@ export function replaceParams(sql: string): ReplacedParams {
       while (j < n) {
         if (sql[j] === '/' && sql[j + 1] === '*') {
           nested += 1;
+          if (j > i) commentCount += 1;
           commentDepth = Math.max(commentDepth, nested);
           j += 2;
         } else if (sql[j] === '*' && sql[j + 1] === '/') {
@@ -236,17 +289,31 @@ export function replaceParams(sql: string): ReplacedParams {
         let j = i + 2;
         while (j < n && sql[j] !== "'") j += sql[j] === '\\' ? 2 : 1;
         copyTo(Math.min(j + 1, n));
-      } else copyTo(i + word.length);
+      } else {
+        const lower = word.toLowerCase();
+        if (lower === 'with') {
+          withAt[depth] = true;
+          withDepth = Math.max(withDepth, withAt.slice(0, depth + 1).filter(Boolean).length);
+        }
+        afterAs = lower === 'as' || (afterAs && (lower === 'not' || lower === 'materialized'));
+        copyTo(i + word.length);
+      }
     } else {
       if (ch === '(') {
+        if (afterAs) cteCount += 1;
         depth += 1;
+        withAt[depth] = false;
         parenDepth = Math.max(parenDepth, depth);
-      } else if (ch === ')') depth -= 1;
+      } else if (ch === ')') {
+        withAt.length = Math.max(1, depth);
+        depth -= 1;
+      }
+      if (!/\s/.test(ch)) afterAs = false;
       copyTo(i + 1);
     }
   }
   for (const at of semicolons.reverse()) out = out.slice(0, at) + out.slice(at + 1);
-  return { sql: out, keys, commentDepth, parenDepth };
+  return { sql: out, keys, commentDepth, parenDepth, commentCount, withDepth, cteCount };
 }
 
 /**
@@ -324,6 +391,15 @@ export class DuckDbInspector implements SqlInspector {
     if (rewritten.commentDepth > MAX_COMMENT_DEPTH) throw fail('sql.error.syntax');
     // Deeply nested queries (e.g. CTE inside CTE) take seconds in the parser (owner 2A).
     if (rewritten.parenDepth > MAX_PAREN_DEPTH) throw fail('sql.error.syntax');
+    // Third verifier round (owner 1A): adjacent comments are quadratic in DuckDB's lexer, nested
+    // `WITH` exponential in its parser, and hundreds of CTEs crash DuckDB-WASM at run time.
+    if (
+      rewritten.commentCount > MAX_COMMENTS ||
+      rewritten.withDepth > MAX_WITH_DEPTH ||
+      rewritten.cteCount > MAX_CTES
+    ) {
+      throw fail('sql.error.syntax');
+    }
     const ast = this.serialize(sql);
     if (ast.error) {
       const message = ast.error_message ?? '';
@@ -336,6 +412,7 @@ export class DuckDbInspector implements SqlInspector {
     if (statements.length > 1) throw fail('sql.error.multipleStatements');
     const stmt = statements[0]!;
 
+    if (countCtes(stmt.node) > MAX_CTES) throw fail('sql.error.syntax');
     const viewNames = new Set(views.map((v) => foldName(v) ?? ''));
     checkTables(stmt.node, viewNames, new Set());
 
